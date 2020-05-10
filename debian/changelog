@@ -1,10 +1,20 @@
+lmod (8.3.10) unstable; urgency=medium
+
+  * New version
+
+ -- Robert Schmidt <rjeschmi@gmail.com>  Sun, 10 May 2020 13:07:18 -0400
+
 lmod (5.8-1) unstable; urgency=medium
 
+  [ Aaron Zauner ]
   * Imported Upstream version 5.8 (Closes: #764722)
   * updated path patch for version 5.8
   * removed watch file (not working with SF.net)
   * change standards version to 3.9.5
   * add short licensetext
+
+  [ Robert Schmidt ]
+  * Just updating version
 
  -- Aaron Zauner <azet@azet.org>  Tue, 04 Nov 2014 16:45:19 -0600
 
