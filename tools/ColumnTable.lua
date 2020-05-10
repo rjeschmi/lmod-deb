@@ -15,13 +15,13 @@
 --    5.  Compute actual number columns that will fit.
 --    6.  Knowing the number of rows and columns, build the table.
 --
--- @classmod ColumnTable 
+-- @classmod ColumnTable
 
 require("strict")
 
 ------------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -58,17 +58,6 @@ M = { gap = 3, innerGap = 1 }
 
 local blank = ' '
 
---------------------------------------------------------------------------
--- A recursive function to return the number of entries the current
--- dimension
--- @param a input array.
--- @param dim size of a in each dimension.
-local function sizeMeHelper(a,dim)
-   if (type (a) == "table") then
-      dim[#dim+1] = #a
-      sizeMeHelper(a[1],dim)
-   end
-end
 
 --------------------------------------------------------------------------
 -- compute the number of dimension in input table.
@@ -76,7 +65,15 @@ end
 -- @return an array with the number of entries of a in each dimension
 local function sizeMe(a)
    local dim = {}
-   sizeMeHelper(a,dim)
+   local rows = #a
+   dim[1] = rows
+   if (type(a[1]) == "table") then
+      local cols = 0
+      for i = 1,#a do
+         cols = max(cols,#a[i])
+      end
+      dim[2] = cols
+   end
    return dim
 end
 
@@ -85,18 +82,20 @@ end
 -- @param self ColumnTable object
 -- @param t input table.
 function M.new(self,t)
-   local tbl = t
-   local o   = {}
+   dbg.start{"ColumnTable:new()"}
+   local width
+   local tbl   = t
+   local o     = {}
    if (t.tbl) then
       tbl = t.tbl
       o   = t
    end
 
-   dbg.start{"ColumnTable:new()"}
    setmetatable(o, self)
    self.__index  = self
-   local width  = 80
-   if (getenv("TERM")) then
+   if (t.width) then
+      width = t.width
+   else
       width  = TermWidth()
    end
 
@@ -106,6 +105,8 @@ function M.new(self,t)
    o._entry_width  = M._entry_width1
    o._display      = M._display1
    o._columnSum    = M._columnSum1
+   dbg.print{"dim: ",#o.dim,"\n"}
+
    if (#o.dim == 2) then
       o._entry_width  = M._entry_width2
       o._display      = M._display2
@@ -116,7 +117,7 @@ function M.new(self,t)
    o:_number_of_columns_rows(tbl)
    o.tbl        = tbl
    o.prt        = t.prt or io.write
-   dbg.fini()
+   dbg.fini("ColumnTable:new")
    return o
 end
 
@@ -146,7 +147,7 @@ function M._clearEmptyColumns2D(self, tbl)
    end
 
    local numActiveCol = #movA
-   
+
    local tt = {}
 
    for irow = 1, #tbl do
@@ -214,8 +215,9 @@ function M._entry_width2(self, t, szA)
    for j = 1, sz do
       local a = t[j]
       local b = {}
-      for i = 1,#a do
-         b[i]    = {prt = length(a[i]),              wrt = a[i]:len()}
+      for i = 1,dim2 do
+         local entry = a[i] or ""
+         b[i]    = {prt = length(entry) or 0,        wrt = entry:len() or 0}
          minA[i] = {prt = min(minA[i].prt,b[i].prt), wrt = min(minA[i].wrt,b[i].wrt)}
          maxA[i] = {prt = max(maxA[i].prt,b[i].prt), wrt = max(maxA[i].wrt,b[i].wrt)}
       end
@@ -236,8 +238,8 @@ function M._entry_width2(self, t, szA)
    --dbg.printA{name = "minA", a = minA}
    --dbg.printA{name = "maxA", a = maxA}
 
-   local imin = {prt = iminPrt, wrt = iminWrt}
-   local imax = {prt = imaxPrt, wrt = imaxWrt}
+   imin = {prt = iminPrt, wrt = iminWrt}
+   imax = {prt = imaxPrt, wrt = imaxWrt}
    dbg.fini()
    return imin, imax
 end
@@ -253,7 +255,7 @@ function M._columnSum1(self, istart, iend)
    local szA     = self.szA
    local maxVprt = 0
    local maxVwrt = 0
-   
+
    for i = istart, iend do
       maxVprt = max(maxVprt, szA[i].prt)
       maxVwrt = max(maxVwrt, szA[i].wrt)
@@ -280,6 +282,7 @@ function M._columnSum2(self, istart, iend)
    for i = istart, iend do
       local a = szA[i]
       for idim = 1, dim2 do
+
          maxA[idim].prt = max(maxA[idim].prt, a[idim].prt)
          maxA[idim].wrt = max(maxA[idim].wrt, a[idim].wrt)
       end
@@ -312,7 +315,9 @@ end
 function M._display1(self, i, icol)
    local width = self.columnCnt[icol]
    local szA   = self.szA
-   local s     = self.tbl[i] .. blank:rep(width.prt-szA[i].prt)
+   local gap   = self.gap
+   local s     = self.tbl[i] .. blank:rep(width.prt-szA[i].prt+gap)
+
    return s
 end
 
@@ -334,9 +339,9 @@ function M._display2(self,i, icol)
    local sum      = 0
 
    local lastCol  = dim2
-   for i = dim2, 1, -1 do
-      if (widthA[i].prt > 0) then break end
-      lastCol = i - 1
+   for j = dim2, 1, -1 do
+      if (widthA[j].prt > 0) then break end
+      lastCol = j - 1
    end
 
    for idim = 1, dim2 do
@@ -429,7 +434,12 @@ function M._number_of_columns_rows(self,t)
 
       dbg.print{"ncols: ",ncols, " sumWrt: ",sumWrt," sumPrt: ",sumPrt,"\n"}
 
-      if (sumWrt < self.term_width) then
+      ----------------------------------------------------------------------
+      -- Use sumPrt to wrap the columns at the number of printed characters.
+      -- Use sumWrt to wrap the columns at the number of written characters.
+
+      local sum = sumPrt
+      if (sum < self.term_width) then
          results = ncols
          break
       end
@@ -438,7 +448,7 @@ function M._number_of_columns_rows(self,t)
    local istart = 1
    local iskip  = nrows - 1
    local ncols  = results or 1
-   local nrows  = math.ceil(sz/ncols)
+   nrows        = math.ceil(sz/ncols)
    dbg.print{"ncols: ",ncols,", nrows: ",nrows,"\n"}
 
    self.ncols   = math.ceil(sz/nrows)
@@ -485,6 +495,7 @@ function M.build_tbl(self)
       if (loc <= self.sz ) then
 	 t[self.ncols] = self:_display(loc, ncols)
       end
+
       local s = concatTbl(t,''):gsub("%s+$","")
       a[#a+1] = s
    end

@@ -15,7 +15,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -57,7 +57,7 @@ MF_TCL.my_name   = "TCL"
 -- @param k key
 -- @param v value
 function MF_TCL.setenv(self, k, v)
-   return "setenv ".. k .. " {" .. v .. "};"
+   return "setenv ".. k .. " {" .. v .. "}"
 end
 
 --------------------------------------------------------------------------
@@ -66,7 +66,7 @@ end
 -- @param k key
 -- @param v value
 function MF_TCL.prepend_path(self, k, v)
-   return "prepend-path ".. k .. " {" .. v .. "};"
+   return "prepend-path ".. k .. " {" .. v .. "}"
 end
 
 --------------------------------------------------------------------------
@@ -76,7 +76,11 @@ end
 -- @param v value
 
 function MF_TCL.append_path(self, k, v)
-   return "append-path ".. k .. " {" .. v .. "};"
+   return "append-path ".. k .. " {" .. v .. "}"
+end
+
+function MF_TCL.header()
+   return "#%Module"
 end
 
 return MF_TCL

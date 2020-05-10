@@ -15,7 +15,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -41,11 +41,8 @@ require("strict")
 
 
 require("utils")
-local dbg           = require("Dbg"):dbg()
-local concatTbl     = table.concat
-local getenv        = os.getenv
-
-local M = {}
+local dbg  = require("Dbg"):dbg()
+local M    = {}
 
 s_exec = false
 
@@ -75,12 +72,12 @@ end
 -- Register the command strings.
 -- @param self A Exec object
 function M.register(self, ...)
-   local arg = { n = select('#',...), ...}
-   local a   = self.a
+   local argA = pack(...)
+   local a    = self.a
 
-   for i = 1, arg.n do
-      if (arg[i]) then
-         a[#a+1] = arg[i]
+   for i = 1, argA.n do
+      if (argA[i]) then
+         a[#a+1] = argA[i]
       end
    end
 end

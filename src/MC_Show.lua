@@ -16,7 +16,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -43,7 +43,8 @@ require("strict")
 
 
 require("utils")
-local pack          = (_VERSION == "Lua 5.1") and argsPack or table.pack
+local pack          = (_VERSION == "Lua 5.1") and argsPack or table.pack -- luacheck: compat
+local MasterControl = require("MasterControl")
 MC_Show             = inheritsFrom(MasterControl)
 MC_Show.my_name     = "MC_Show"
 MC_Show.my_sType    = "load"
@@ -60,18 +61,19 @@ M.myModuleFullName  = MasterControl.myModuleFullName
 M.myModuleName      = MasterControl.myModuleName
 M.myModuleVersion   = MasterControl.myModuleVersion
 M.myModuleUsrName   = MasterControl.myModuleUsrName
+M.color_banner      = MasterControl.color_banner
 
 local function ShowCmd(name,...)
    A[#A+1] = ShowCmdStr(name, ...)
 end
 
 local function Show_help(...)
-   local arg = pack(...)
-   local a   = {}
-   local b   = {}
-   a[#a+1]   = "help("
-   for i = 1,arg.n do
-      b[#b + 1] = "[[".. arg[i] .."]]"
+   local argA = pack(...)
+   local a    = {}
+   local b    = {}
+   a[#a+1]    = "help("
+   for i = 1,argA.n do
+      b[#b + 1] = "[[".. argA[i] .."]]"
    end
    a[#a+1]   = concatTbl(b,", ")
    a[#a+1]   = ")\n"
@@ -84,6 +86,13 @@ end
 -- @param self A MasterControl object
 function M.help(self, ...)
    Show_help(...)
+end
+
+--------------------------------------------------------------------------
+-- Print extensions command.
+-- @param self A MasterControl object
+function M.extensions(self, ...)
+   ShowCmd("extensions",...)
 end
 
 --------------------------------------------------------------------------
@@ -139,6 +148,13 @@ end
 -- @param self A MasterControl object.
 function M.message(self, ...)
    ShowCmd("LmodMessage", ...)
+end
+
+--------------------------------------------------------------------------
+-- Print message raw command.
+-- @param self A MasterControl object.
+function M.msg_raw(self, ...)
+   ShowCmd("LmodMsgRaw", ...)
 end
 
 --------------------------------------------------------------------------
@@ -207,6 +223,30 @@ end
 -- @param mA An array of module names (MName objects)
 function M.load(self, mA)
    A[#A+1] = ShowCmdA("load",mA)
+end
+
+--------------------------------------------------------------------------
+-- Print load_any command.
+-- @param self A MasterControl object
+-- @param mA An array of module names (MName objects)
+function M.load_any(self, mA)
+   A[#A+1] = ShowCmdA("load_any",mA)
+end
+
+--------------------------------------------------------------------------
+-- Print mgrload command.
+-- @param self A MasterControl object
+-- @param mA An array of module names (MName objects)
+function M.mgrload(self, required, active)
+   A[#A+1] = ShowCmd("mgrload",required, active)
+end
+
+--------------------------------------------------------------------------
+-- Print depends_on command.
+-- @param self A MasterControl object
+-- @param mA An array of module names (MName objects)
+function M.depends_on(self, mA)
+   A[#A+1] = ShowCmdA("depends_on",mA)
 end
 
 M.load_usr = M.load

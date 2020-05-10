@@ -8,7 +8,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -40,12 +40,13 @@
 require("strict")
 
 
-local Bash        = inheritsFrom(BaseShell)
-local dbg         = require("Dbg"):dbg()
-local Var         = require("Var")
-local concatTbl   = table.concat
-local stdout      = io.stdout
-Bash.my_name      = "bash"
+local BaseShell = require("BaseShell")
+local Bash      = inheritsFrom(BaseShell)
+local dbg       = require("Dbg"):dbg()
+local Var       = require("Var")
+local concatTbl = table.concat
+local stdout    = io.stdout
+Bash.my_name    = "bash"
 
 --------------------------------------------------------------------------
 -- Bash:alias(): Either define or undefine a bash shell alias.
@@ -54,12 +55,13 @@ Bash.my_name      = "bash"
 
 function Bash.alias(self, k, v)
    if (not v) then
-      stdout:write("unalias ",k," 2> /dev/null;\n")
-      dbg.print{   "unalias ",k," 2> /dev/null;\n"}
+      stdout:write("unalias ",k," 2> /dev/null || true;\n")
+      dbg.print{   "unalias ",k," 2> /dev/null || true;\n"}
    else
-      v = v:gsub(";%s*$","")
-      stdout:write("alias ",k,"='",v,"';\n")
-      dbg.print{   "alias ",k,"='",v,"';\n"}
+      v = v:gsub(";%s*$",""):multiEscaped()
+
+      stdout:write("alias ",k,"=",v,";\n")
+      dbg.print{   "alias ",k,"=",v,";\n"}
    end
 end
 
@@ -70,12 +72,12 @@ end
 
 function Bash.shellFunc(self, k, v)
    if (not v) then
-      stdout:write("unset -f ",k," 2> /dev/null;\n")
-      dbg.print{   "unset -f ",k," 2> /dev/null;\n"}
+      stdout:write("unset -f ",k," 2> /dev/null || true;\n")
+      dbg.print{   "unset -f ",k," 2> /dev/null || true;\n"}
    else
       local func = v[1]:gsub(";%s*$","")
-      stdout:write(k,"() { ",func,"; };\n")
-      dbg.print{   k,"() { ",func,"; };\n"}
+      stdout:write(k," () { ",func,"; };\n")
+      dbg.print{   k," () { ",func,"; };\n"}
    end
 end
 
@@ -86,7 +88,10 @@ end
 
 function Bash.expandVar(self, k, v, vType)
    local lineA       = {}
-   v                 = v:doubleQuoteString()
+   if (k:find("%.")) then
+      return
+   end
+   v                 = tostring(v):multiEscaped()
    lineA[#lineA + 1] = k
    lineA[#lineA + 1] = "="
    lineA[#lineA + 1] = v
@@ -98,16 +103,29 @@ function Bash.expandVar(self, k, v, vType)
    end
    local line = concatTbl(lineA,"")
    stdout:write(line)
-   dbg.print{   line}
+   if (k:find('^_ModuleTable') == nil) then
+      dbg.print{   line}
+   end
 end
 
 --------------------------------------------------------------------------
 -- Bash:unset() unset an environment variable.
 
 function Bash.unset(self, k, vType)
+   if (k:find("%.")) then
+      return
+   end
    stdout:write("unset ",k,";\n")
    dbg.print{   "unset ",k,";\n"}
 end
 
+--------------------------------------------------------------------------
+-- Bash:real_shell(): Return true if the output shell is "real" or not.
+--                    This base function returns false.  Bash, Csh
+--                    and Fish should return true.
+
+function Bash.real_shell(self)
+   return true
+end
 
 return Bash

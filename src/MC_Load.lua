@@ -14,7 +14,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -38,11 +38,10 @@ require("strict")
 --
 --------------------------------------------------------------------------
 
+local MasterControl    = require("MasterControl")
 local MC_Load          = inheritsFrom(MasterControl)
 local M                = MC_Load
 local dbg              = require("Dbg"):dbg()
-local format           = string.format
-local getenv           = os.getenv
 M.my_name              = "MC_Load"
 M.my_sType             = "load"
 M.my_tcl_mode          = "load"
@@ -50,13 +49,20 @@ M.always_load          = MasterControl.load_usr
 M.always_unload        = MasterControl.unload
 M.add_property         = MasterControl.add_property
 M.append_path          = MasterControl.append_path
+M.color_banner         = MasterControl.color_banner
 M.conflict             = MasterControl.conflict
+M.depends_on           = MasterControl.depends_on
 M.execute              = MasterControl.execute
+M.extensions           = MasterControl.quiet
 M.family               = MasterControl.family
 M.help                 = MasterControl.quiet
 M.inherit              = MasterControl.inherit
 M.load                 = MasterControl.load
+M.load_any             = MasterControl.load_any
 M.load_usr             = MasterControl.load_usr
+M.message              = MasterControl.message
+M.msg_raw              = MasterControl.msg_raw
+M.mgrload              = MasterControl.mgrload
 M.myFileName           = MasterControl.myFileName
 M.myModuleFullName     = MasterControl.myModuleFullName
 M.myModuleUsrName      = MasterControl.myModuleUsrName

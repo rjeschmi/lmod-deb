@@ -1,15 +1,32 @@
 #!/bin/bash
 # -*- shell-script -*-
+#
+########################################################################
+# Start Lmod BASHENV
+########################################################################
 
+if [ -z "${LMOD_SH_DBG_ON+x}" ]; then
+   case "$-" in
+     *v*x*) __lmod_vx='vx' ;;
+     *v*)   __lmod_vx='v'  ;;
+     *x*)   __lmod_vx='x'  ;;
+   esac;
+fi
 
-LMOD_PKG=@PKGV@
-LMOD_DIR=@PKGV@/libexec
-LMOD_CMD=@PKGV@/libexec/lmod
-MODULESHOME=@PKGV@
-export LMOD_PKG
-export LMOD_CMD
-export LMOD_DIR
-export MODULESHOME
+[ -n "${__lmod_vx:-}" ] && set +$__lmod_vx 
+
+export LMOD_ROOT=@lmod_root@
+export LMOD_PKG=@PKGV@
+
+if [ -n "${__lmod_vx:-}" ]; then
+    echo "Shell debugging temporarily silenced: export LMOD_SH_DBG_ON=1 for this output ($LMOD_PKG/init/bash)" 1>&2
+fi
+
+export LMOD_DIR=$LMOD_PKG/libexec
+export LMOD_CMD=$LMOD_PKG/libexec/lmod
+export MODULESHOME=$LMOD_PKG
+
+export LMOD_SETTARG_FULL_SUPPORT=@lmod_settarg_full_support@
 
 ########################################################################
 #  Define the module command:  The first line runs the "lmod" command
@@ -47,17 +64,47 @@ export MODULESHOME
 #
 # See Lmod web site for more details.
 
-module()
-{
-  eval $($LMOD_CMD bash "$@") @bash_err_to_out@
-  [ $? = 0 ] && eval $(${LMOD_SETTARG_CMD:-:} -s sh)
-}
 
-export_module=$(echo "@export_module@" | tr '[:upper:]' '[:lower:]')
-if [ -n "$BASH_VERSION" -a "$export_module" != no ]; then
-  export -f module
+if [ "@silence_shell_debugging@" = "no" ]; then
+   module()
+   {
+     eval $($LMOD_CMD @my_shell@ "$@") && eval $(${LMOD_SETTARG_CMD:-:} -s sh)
+   }
+else
+   module()
+   {
+     ############################################################
+     # Silence shell debug UNLESS $LMOD_SH_DBG_ON has a value
+     if [ -z "${LMOD_SH_DBG_ON+x}" ]; then
+        case "$-" in
+          *v*x*) __lmod_sh_dbg='vx' ;;
+          *v*)   __lmod_sh_dbg='v'  ;;
+          *x*)   __lmod_sh_dbg='x'  ;;
+        esac;
+     fi
+     
+     if [ -n "${__lmod_sh_dbg:-}" ]; then
+        set +$__lmod_sh_dbg 
+        echo "Shell debugging temporarily silenced: export LMOD_SH_DBG_ON=1 for Lmod's output" 1>&2
+     fi
+
+     eval $($LMOD_CMD @my_shell@ "$@") && eval $(${LMOD_SETTARG_CMD:-:} -s sh)
+     __lmod_my_status=$?
+
+     ############################################################
+     # Un-silence shell debug after module command
+     if [ -n "${__lmod_sh_dbg:-}" ]; then
+       echo "Shell debugging restarted" 1>&2
+       set -$__lmod_sh_dbg;
+       unset __lmod_sh_dbg;
+     fi;
+     return $__lmod_my_status
+   }
 fi
-unset export_module
+
+
+LMOD_VERSION="@lmod_version@"
+export LMOD_VERSION
 
 if [ "${LMOD_SETTARG_CMD:-:}" != ":" ]; then
   settarg () {
@@ -75,11 +122,17 @@ fi
 #  It does much more do: "ml --help" for more information.
 
 
-unalias ml > /dev/null 2>&1
+unalias ml 2> /dev/null || true
 ml()
 {
   eval $($LMOD_DIR/ml_cmd "$@")
-} 
+}
+
+if [ -n "${BASH_VERSION:-}" -a "@export_module@" != no ]; then
+  export -f module
+  export -f ml
+fi
+unset export_module
 
 ########################################################################
 #  clearMT removes the ModuleTable from your environment.  It is rarely
@@ -87,42 +140,40 @@ ml()
 
 clearMT()
 {
-  eval $($LMOD_DIR/clearMT_cmd bash)
+  eval $($LMOD_DIR/clearLMOD_cmd --shell bash --simple)
 }
 
-########################################################################
-#  The following make the action of the settarg available to the titlebar
-#  for both xterm's and screen but only for interactive shells.
-if [ "$PS1" ]; then
-  if [ -n "$LMOD_FULL_SETTARG_SUPPORT" -a "$LMOD_FULL_SETTARG_SUPPORT" != no ]; then
-    xSetTitleLmod()
-    {
-      builtin echo -n -e "\033]2;$1\007";
-    }
-    SET_TITLE_BAR=:
+clearLmod()
+{
+  module --force purge
+  eval $($LMOD_DIR/clearLMOD_cmd --shell bash --full "$@")
+}
 
-    case $TERM in
-      xterm*)
-        SET_TITLE_BAR=xSetTitleLmod
-        ;;
-    esac
-
-    SHOST=${SHOST-${HOSTNAME%%.*}}
-    precmd()
-    {
-      eval $(${LMOD_SETTARG_CMD:-:} -s bash)
-      ${SET_TITLE_BAR:-:} "${TARG_TITLE_BAR_PAREN}${USER}@${SHOST}:${PWD/#$HOME/~}"
-      ${USER_PROMPT_CMD:-:}
-    }
-
-    # define the PROMPT_COMMAND to be precmd iff it isn't defined already.
-    : ${PROMPT_COMMAND:=precmd}
-  fi
-fi
+xSetTitleLmod()
+{
+  builtin echo -n -e "\033]2;$1\007";
+}
 
 ########################################################################
 #  Make tab completions available to bash users.
 
-if [ ${BASH_VERSINFO:-0} -ge 3 ] && [ -r  @PKGV@/init/lmod_bash_completions ] && [ "$PS1" ]; then
+if [ ${BASH_VERSINFO:-0} -ge 3 ] && [ -r  @PKGV@/init/lmod_bash_completions ] && [ -n "${PS1:-}" ]; then
  . @PKGV@/init/lmod_bash_completions
 fi
+
+
+# Restoring XTRACE and VERBOSE states.
+if [ -n "${__lmod_vx:-}" ]; then
+  echo "Shell debugging restarted" 1>&2
+  set -$__lmod_vx;
+  unset __lmod_vx;
+fi;
+
+########################################################################
+# End Lmod BASHENV
+########################################################################
+#
+# Local Variables:
+# mode: shell-script
+# indent-tabs-mode: nil
+# End:

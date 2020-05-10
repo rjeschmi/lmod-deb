@@ -8,7 +8,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -35,7 +35,11 @@
 --------------------------------------------------------------------------
 -- BaseShell:  This is the base class for all the shell output classes.
 
+_G._DEBUG          = false
+local posix        = require("posix")
+
 require("strict")
+require("myGlobals")
 require("inherits")
 require("serializeTbl")
 require("string_utils")
@@ -46,16 +50,16 @@ local dbg          = require("Dbg"):dbg()
 local MT           = require("MT")
 local base64       = require("base64")
 local concatTbl    = table.concat
+local cosmic       = require("Cosmic"):singleton()
 local decode64     = base64.decode64
 local encode64     = base64.encode64
-local floor        = math.floor
-local format       = string.format
+local strfmt       = string.format
 local getenv       = os.getenv
 local huge         = math.huge
-local min          = math.min
-local pack         = (_VERSION == "Lua 5.1") and argsPack   or table.pack
+local pack         = (_VERSION == "Lua 5.1") and argsPack   or table.pack -- luacheck: compat
 local pairsByKeys  = pairsByKeys
-
+local posix_setenv = posix.setenv
+local stdout       = io.stdout
 
 --------------------------------------------------------------------------
 -- BaseShell Member functions:
@@ -78,12 +82,37 @@ function M.setActive(self, active)
 end
 
 --------------------------------------------------------------------------
+-- BaseShell:real_shell(): Return true if the output shell is "real" or not.
+--                         This base function returns false.  Bash, Csh
+--                         and Fish should return true.
+
+function M.real_shell(self)
+   return false
+end
+
+--------------------------------------------------------------------------
 -- BaseShell:isActive(): Are we active.
 
 function M.isActive(self)
    return self._active
 end
 
+--------------------------------------------------------------------------
+-- BaseShell:initialize(): Do this first.
+
+function M.initialize(self)
+   -- normalize nothing happens here on most shells
+end
+
+function M.report_failure(self)
+   local line = "\nfalse\n"
+   stdout:write(line)
+   dbg.print{   line}
+end
+
+function M.report_success(self)
+   -- No output for normal shells
+end
 
 --------------------------------------------------------------------------
 -- BaseShell:expand(): This base class function is what converts the
@@ -102,12 +131,26 @@ function M.expand(self, tbl)
       return
    end
 
+   self:initialize()
 
    for k,v in pairsByKeys(tbl) do
-      local vstr, vType, priorityStrT = v:expand()
-      if (next(priorityStrT)) then
+      local vstr, vType, priorityStrT, refCountT = v:expand()
+      if (next(priorityStrT) ~= nil) then
          for prtyKey,prtyStr in pairs(priorityStrT) do
-            self:expandVar(prtyKey,prtyStr,"path")
+            if (prtyStr) then
+               self:expandVar(prtyKey,prtyStr,"path")
+            else
+               self:unset(prtyKey,"path")
+            end
+         end
+      end
+      if (next(refCountT) ~= nil) then
+         for key,value in pairs(refCountT) do
+            if (value) then
+               self:expandVar(key, value, "path")
+            else
+               self:unset(key,"path")
+            end
          end
       end
       if (vType == "alias") then
@@ -122,7 +165,7 @@ function M.expand(self, tbl)
          self:expandVar(k,vstr,vType)
       end
    end
-
+   self:report_success()
    dbg.fini("BaseShell:expand")
 end
 
@@ -136,36 +179,25 @@ end
 
 function M.expandMT(self, vstr)
    dbg.start{"BaseShell:expandMT(vstr)"}
-   local vv      = encode64(vstr)
-   local a       = {}
-   local vlen    = vv:len()
-   local blksize = 512
-   local nblks   = floor((vlen - 1)/blksize) + 1
-   local name
-   local alen
-
-   for i = 1, vlen, blksize do
-      alen    = min(i+blksize-1,vlen)
-      a[#a+1] = vv:sub(i,alen)
+   local t     = build_MT_envT(vstr)
+   local nblks = 0
+   for k, v in pairsByKeys(t) do
+      self:expandVar(k, v)
+      nblks = nblks + 1
    end
-   for i = 1, #a do
-      name = format("_ModuleTable%03d_",i)
-      self:expandVar(name, a[i])
-   end
-   self:expandVar("_ModuleTable_Sz_",tostring(#a))
 
    for i = nblks+1, huge do
-      name    = format("_ModuleTable%03d_",i)
-      local v = getenv(name)
+      local name  = strfmt("_ModuleTable%03d_",i)
+      local v     = getenv(name)
       if (v == nil) then break end
       self:unset(name)
    end
 
    if (dbg.active()) then
-      local mt     = MT:mt()
-      local indent = dbg.indent()
-      local s      = serializeTbl{indent=true, name="_ModuleTable_",
-                             value=mt}
+      local frameStk = require("FrameStk"):singleton()
+      local mt       = frameStk:mt()
+      local indent   = dbg.indent()
+      local s        = serializeTbl{indent=true, name="_ModuleTable_", value=mt}
       for line in s:split("\n") do
          io.stderr:write(indent,line,"\n")
       end
@@ -176,12 +208,18 @@ end
 
 
 function M.echo(self, ...)
+   local LMOD_REDIRECT = cosmic:value("LMOD_REDIRECT")
    if (LMOD_REDIRECT == "no") then
+      posix_setenv("LC_ALL",nil,true)
       pcall(pager,io.stderr,...)
+      posix_setenv("LC_ALL","C",true)
    else
-      local arg = pack(...)
-      for i = 1, arg.n do
-         local whole=arg[i]
+      local argA = pack(...)
+      for i = 1, argA.n do
+         local whole = argA[i]
+         if (whole:sub(-1) == "\n") then
+            whole = whole:sub(1,-2)
+         end
          for line in whole:split("\n") do
             line = line:gsub("'","'\"'\"'"):gsub(" ","' '")
             io.stdout:write("echo '",line,"';\n")
@@ -191,9 +229,9 @@ function M.echo(self, ...)
 end
 
 function M._echo(self, ...)
-   local arg = pack(...)
-   for i = 1, arg.n do
-      io.stderr:write(arg[i])
+   local argA = pack(...)
+   for i = 1, argA.n do
+      io.stderr:write(argA[i])
    end
 end
 
@@ -208,25 +246,38 @@ local function valid_shell(shellTbl, shell_name)
    return shellTbl[shell_name]
 end
 
-s_shellTbl = false
+local s_shellTbl = false
 
 local function createShellTbl()
    if (not s_shellTbl) then
-      local shellTbl     = {}
+      local CMake        = require('CMake')
       local Csh          = require('Csh')
       local Bash         = require('Bash')
       local Bare         = require('Bare')
+      local Fish         = require('Fish')
+      local Lisp         = require('Lisp')
       local Perl         = require('Perl')
       local Python       = require('Python')
-      shellTbl["sh"]     = Bash
-      shellTbl["bash"]   = Bash
-      shellTbl["zsh"]    = Bash
-      shellTbl["csh"]    = Csh
-      shellTbl["tcsh"]   = Csh
-      shellTbl["perl"]   = Perl
-      shellTbl["python"] = Python
-      shellTbl.bare      = Bare
-      s_shellTbl         = shellTbl
+      local R            = require('R')
+      local Ruby         = require('Ruby')
+      s_shellTbl = {
+         ["sh"]     = Bash,
+         ["bash"]   = Bash,
+         ["ksh"]    = Bash,
+         ["zsh"]    = Bash,
+         ["fish"]   = Fish,
+         ["emacs"]  = Lisp,
+         ["lisp"]   = Lisp,
+         ["csh"]    = Csh,
+         ["tcsh"]   = Csh,
+         ["perl"]   = Perl,
+         ["python"] = Python,
+         ["cmake"]  = CMake,
+         ["bare"]   = Bare,
+         ["r"]      = R,
+         ["R"]      = R,
+         ["ruby"]   = Ruby,
+      }
    end
 end
 
@@ -239,9 +290,9 @@ end
 --------------------------------------------------------------------------
 -- BaseShell:build():  This is the factory that builds the derived shell.
 
-function M.build(shell_name)
+function M.build(self, shell_name)
    createShellTbl()
-   local o     = valid_shell(s_shellTbl, shell_name):create()
+   local o     = valid_shell(s_shellTbl, shell_name:lower()):create()
    o._active   = true
    return o
 end

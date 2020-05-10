@@ -24,7 +24,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -47,17 +47,48 @@
 --  THE SOFTWARE.
 --
 --------------------------------------------------------------------------
-
-
-local cmd = arg[0]
-
-local i,j = cmd:find(".*/")
-local cmd_dir = "./"
-if (i) then
-   cmd_dir = cmd:sub(1,j)
+local sys_lua_path = "@sys_lua_path@"
+if (sys_lua_path:sub(1,1) == "@") then
+   sys_lua_path = package.path
 end
-package.path = cmd_dir .. "../tools/?.lua;" ..
-               cmd_dir .. "?.lua;"       .. package.path
+
+local sys_lua_cpath = "@sys_lua_cpath@"
+if (sys_lua_cpath:sub(1,1) == "@") then
+   sys_lua_cpath = package.cpath
+end
+
+package.path   = sys_lua_path
+package.cpath  = sys_lua_cpath
+
+local arg_0    = arg[0]
+_G._DEBUG      = false
+local posix    = require("posix")
+local readlink = posix.readlink
+local stat     = posix.stat
+
+local st       = stat(arg_0)
+while (st.type == "link") do
+   local lnk = readlink(arg_0)
+   if (arg_0:find("/") and (lnk:find("^/") == nil)) then
+      local dir = arg_0:gsub("/[^/]*$","")
+      lnk       = dir .. "/" .. lnk
+   end
+   arg_0 = lnk
+   st    = stat(arg_0)
+end
+
+local ia,ja = arg_0:find(".*/")
+local cmd_dir = "./"
+if (ia) then
+   cmd_dir = arg_0:sub(1,ja)
+end
+
+package.path  = cmd_dir .. "../tools/?.lua;"       ..
+                cmd_dir .. "../tools/?/init.lua;"  ..
+                cmd_dir .. "?.lua;"                ..
+                sys_lua_path
+package.cpath = cmd_dir .. "../lib/?.so;"..
+                sys_lua_cpath
 
 require("strict")
 require("string_utils")
@@ -76,11 +107,8 @@ end
 
 function isDir(d)
    if (d == nil) then return false end
-
    local attr    = lfs.attributes(d)
-   local results = (attr and attr.mode == "directory")
-
-   return result
+   return (attr and attr.mode == "directory")
 end
 
 function myInsert(appendFlg, existFlg)
@@ -108,7 +136,7 @@ function myClean(cleanFlg)
                    path = path:sub(1,-2)
                 end
                 if (path == "") then path = false end
-                return path 
+                return path
              end
    else
       return function (path)
@@ -145,36 +173,46 @@ function main()
    local insert    = myInsert(masterTbl.appendFlg, masterTbl.existFlg)
    local cleanPath = myClean(cleanFlg)
    local chkDir    = myChkDir(masterTbl.existFlg)
+
    remove(pargs,1)
+
+   local function build_array(s,A)
+      if (s == ":") then
+         A[#A + 1] = false
+      else
+         for path in s:split(':') do
+            A[#A+1] = cleanPath(path)
+         end
+      end
+   end
 
    ------------------------------------------------------------------------
    -- Convert empty string input values into false and clean path if requested
+   -- Also separate colons into separate arguments
    local valueA    = {}
-   for i = 1,#pargs do
-      valueA[i] = cleanPath(pargs[i])
+   for j = 1,#pargs do
+      build_array(pargs[j], valueA)
    end
-   
+
 
    ------------------------------------------------------------------------
    -- Convert empty string envVar values into false and clean path if requested
    if (envVar) then
-      for v in envVar:split(sep) do
-	 envVarA[#envVarA + 1] = cleanPath(v)
-      end
+      build_array(envVar, envVarA)
    end
 
    ------------------------------------------------------------------------
    -- Make a hash table of input values
    local valueT = {}
-   for i = 1, #valueA do
-      valueT[valueA[i]] = true
+   for j = 1, #valueA do
+      valueT[valueA[j]] = true
    end
 
    ------------------------------------------------------------------------
    -- Remove any entries in input from envVarA
    local newA = {}
-   for i = 1, #envVarA do
-      local v = envVarA[i]
+   for j = 1, #envVarA do
+      local v = envVarA[j]
       if (not valueT[v]) then
          if (v == false) then v = "" end
          newA[#newA+1] = v
@@ -183,9 +221,9 @@ function main()
 
    ------------------------------------------------------------------------
    -- Insert/append new entries with magic insert function.
-   
-   for i = 1, #valueA do
-      local v = valueA[i]
+
+   for j = 1, #valueA do
+      local v = valueA[j]
       if (v == false) then v = "" end
       insert(newA, v)
    end

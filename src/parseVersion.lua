@@ -14,7 +14,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -39,7 +39,7 @@ require("strict")
 --------------------------------------------------------------------------
 
 require("string_utils")
-local dbg          = require("Dbg"):dbg()
+--local dbg        = require("Dbg"):dbg()
 local concatTbl    = table.concat
 
 --- replacement table for version parts
@@ -54,7 +54,7 @@ replaceT = {
 }
 
 --------------------------------------------------------------------------
---- The returned value will be an array of string. Numeric portions of the
+-- The returned value will be an array of string. Numeric portions of the
 -- version are padded to 9 digits so they will compare numerically, but
 -- without relying on how numbers compare relative to strings. Dots are dropped,
 -- but dashes are retained. Trailing zeros between alpha segments or dashes
@@ -117,11 +117,12 @@ function parseVersion(versionStr)
 
    --dbg.print{"versionStr: ",versionStr," results: ",concatTbl(vA,"."),"\n"}
    --dbg.fini()
-   return concatTbl(vA,".")
+   local result = concatTbl(vA,"."):gsub("%./%.","/")
+   return result
 end
 
 --------------------------------------------------------------------------
---- Return the iterator return the next piece of the version.
+-- Return the iterator return the next piece of the version.
 -- @param  versionStr A version string.
 -- @return iterator over parts of the version string.
 function parseVersionParts(versionStr)
@@ -131,8 +132,13 @@ function parseVersionParts(versionStr)
    local i,j, results
    return
       function()
-         -- skip over "."
+
+         -- skip over "." unless
          if (ipos <= s_end and s:sub(ipos,ipos) == ".") then
+            if (ipos == 1) then
+               ipos = ipos + 1
+               return string.format("%09d", 0)
+            end
             ipos = ipos + 1
          end
 
@@ -153,8 +159,17 @@ function parseVersionParts(versionStr)
          i,j = s:find("^%d+",ipos)
          if (i) then
             ipos = j + 1
-            return string.format("%09d",s:sub(i,j))
+            return string.format("%09d",tonumber(s:sub(i,j)))
          end
+
+         -- grab '/'
+         i,j = s:find("^/",ipos)
+         if (i) then
+            ipos = j + 1
+            results = s:sub(i,j)
+            return "/"
+         end
+
 
          -- grab all letters, then use replaceT table to normalize
          i,j = s:find("^%a+",ipos)

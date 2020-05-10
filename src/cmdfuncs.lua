@@ -1,8 +1,12 @@
 --------------------------------------------------------------------------
--- The all the user commands are implemented here.
+-- The all the user sub-commands are implemented here.
 -- @module cmdfuncs
 
+_G._DEBUG          = false
+local posix        = require("posix")
+
 require("strict")
+
 --------------------------------------------------------------------------
 -- Lmod License
 --------------------------------------------------------------------------
@@ -13,7 +17,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -42,33 +46,40 @@ require("string_utils")
 require("TermWidth")
 require("fileOps")
 require("utils")
+local Banner       = require("Banner")
 local BeautifulTbl = require('BeautifulTbl')
+local Cache        = require("Cache")
 local ColumnTable  = require('ColumnTable')
+local FrameStk     = require('FrameStk')
+local Master       = require('Master')
 local MName        = require("MName")
 local Spider       = require("Spider")
 local Version      = require("Version")
 local concatTbl    = table.concat
+local cosmic       = require("Cosmic"):singleton()
 local dbg          = require("Dbg"):dbg()
 local getenv       = os.getenv
 local hook         = require("Hook")
+local i18n         = require("i18n")
 local lfs          = require("lfs")
-local posix        = require("posix")
-local pack         = (_VERSION == "Lua 5.1") and argsPack or table.pack
-local unpack       = unpack or table.unpack
+local pack         = (_VERSION == "Lua 5.1") and argsPack or table.pack  -- luacheck: compat
+local unpack       = (_VERSION == "Lua 5.1") and unpack or table.unpack  -- luacheck: compat
+
+local system_name  = cosmic:value("LMOD_SYSTEM_NAME")
 
 --------------------------------------------------------------------------
--- Access(): Both Help and Whatis functions funnel their actions through
+-- Both Help and Whatis functions funnel their actions through
 -- the Access function. MC_Access defines real functions for both M.help
 -- and M.access.  The mcp.accessMode function activates one or the other
 -- depending on what mode Access is called with.
-
+-- @param mode Whether this function has be called via *Help* or *Whatis*.
 local function Access(mode, ...)
-   local master    = Master:master()
-   local shell     = master.shell
+   local master    = Master:singleton()
+   local shell     = _G.Shell
    local masterTbl = masterTbl()
    dbg.start{"Access(", concatTbl({...},", "),")"}
    mcp = MasterControl.build("access", mode)
-   mcp.accessMode(mode,true)
+   mcp:setAccessMode(mode,true)
 
    local n = select('#',...)
    if (n < 1) then
@@ -78,16 +89,16 @@ local function Access(mode, ...)
    end
 
    master:access(...)
-   mcp.accessMode(mode,false)
+   mcp:setAccessMode(mode,false)
    dbg.fini("Access")
 end
 
 --------------------------------------------------------------------------
--- findNamedCollections:  This helper function walks the ~/.lmod.d
--- directory and reports back the list of named collections.
--- Note that names that start with "." or end with "~" or start with
--- "__" are ignored.
-
+-- This helper function walks the ~/.lmod.d directory and reports back
+-- the list of named collections. Note that names that start with "."
+-- or end with "~" or start with "__" are ignored.
+-- @param a An array containing the results.
+-- @param path The Lmod.d directory path.
 local function findNamedCollections(a,path)
    if (not isDir(path)) then return end
    for file in lfs.dir(path) do
@@ -98,49 +109,92 @@ local function findNamedCollections(a,path)
          if (attr and attr.mode == "directory") then
             findNamedCollections(a,f)
          else
-            a[#a+1] = f
+            local idx    = file:find("%.")
+            local accept = (not idx) and (not system_name)
+            if (idx and system_name) then
+               accept    = file:sub(idx+1,-1) == system_name
+               f         = pathJoin(path, file:sub(1,idx-1))
+            end
+            if (accept) then
+               a[#a+1] = f
+            end
          end
       end
    end
+   table.sort(a)
 end
 
 ------------------------------------------------------------------------
--- Avail(): just convert the vararg into an actual array and call
---          master.avail to do the real work.
-
+-- Just convert the vararg into an actual array and call
+-- master.avail to do the real work.
 function Avail(...)
-   local master = Master:master()
-   local arg    = pack(...)
-   master.avail(arg)
+   local shell = _G.Shell
+   local a     = master:avail(pack(...))
+   if (next(a) ~= nil) then
+      shell:echo(concatTbl(a,""))
+   end
 end
 
 --------------------------------------------------------------------------
--- GetDefault(): get the command line argument and use MT:getMTfromFile()
---               to read the module table from the file and use that
---               collections of module to load.  This routine is deprecated
---               and will be removed.  Use restore instead.
+-- Report the modules in the requested collection
+function CollectionLst(collection)
+   collection  = collection or "default"
+   dbg.start{"CollectionLst(",collection,")"}
+   local masterTbl = masterTbl()
+   local sname     = (not system_name) and "" or "." .. system_name
+   local path      = pathJoin(os.getenv("HOME"), ".lmod.d", collection .. sname)
+   local mt        = FrameStk:singleton():mt()
+   local a         = mt:reportContents{fn=path, name=collection}
+   local shell     = _G.Shell
+   local cwidth    = masterTbl.rt and LMOD_COLUMN_TABLE_WIDTH or TermWidth()
+   if (masterTbl.terse) then
+      for i = 1,#a do
+         shell:echo(a[i].."\n")
+      end
+   else
+      if (#a < 1) then
+         LmodWarning{msg="w_No_Coll",collection=collection}
+         dbg.fini("CollectionLst")
+         return
+      end
+      shell:echo(i18n("coll_contains",{collection=collection}))
+      local b = {}
+      for i = 1,#a do
+         b[#b+1] = { "   " .. tostring(i) .. ")", a[i] }
+      end
+      local ct = ColumnTable:new{tbl=b, gap = 0, width = cwidth}
+      shell:echo(ct:build_tbl(),"\n")
+   end
+   dbg.fini("CollectionLst")
+end
 
 
-function GetDefault(a)
-   a          = a or "default"
-   dbg.start{"GetDefault(",a,")"}
+--------------------------------------------------------------------------
+-- Get the command line argument and use MT:getMTfromFile()
+-- to read the module table from the file and use that
+-- collections of module to load.  This routine is deprecated
+-- and will be removed.  Use restore instead.
+-- @param collection The collection name (default="default")
+function GetDefault(collection)
+   collection  = collection or "default"
+   dbg.start{"GetDefault(",collection,")"}
 
-   local sname = (LMOD_SYSTEM_NAME == nil) and "" or "." .. LMOD_SYSTEM_NAME 
-   local path = pathJoin(os.getenv("HOME"), ".lmod.d", a .. sname)
-   local mt   = MT:mt()
-   mt:getMTfromFile{fn=path, name=a}
+   local sname = (not system_name) and "" or "." .. system_name
+   local path  = pathJoin(os.getenv("HOME"), ".lmod.d", collection .. sname)
+   local mt    = FrameStk:singleton():mt()
+   mt:getMTfromFile{fn=path, name=collection, }
    dbg.fini("GetDefault")
 end
 
 --------------------------------------------------------------------------
--- Help():  Define the prtHdr function and use the helper function Access()
---          to report the Help message to the user.
-
+-- Define the prtHdr function and use the helper function Access()
+-- to report the Help message to the user.
 function Help(...)
 
-   prtHdr = function()
-      local twidth    = TermWidth()
-      local middleStr = "Module Specific Help for \"" .. ModuleName .. "\""
+   local banner = Banner:singleton()
+
+   _G.prtHdr = function()
+      local middleStr = i18n("specific_hlp",{fullName = _G.FullName})
       local title     = banner:bannerStr(middleStr)
       local a         = {}
       a[#a+1]         = "\n"
@@ -152,62 +206,91 @@ function Help(...)
    Access("help",...)
 end
 
+function IsAvail(...)
+   local argA = pack(...)
+   for i = 1, argA.n do
+      local mname = MName:new("load", argA[i])
+      if (not mname:valid()) then
+         setWarningFlag()
+         break
+      end
+   end
+end
+
+function IsLoaded(...)
+   local argA = pack(...)
+   for i = 1, argA.n do
+      local mname = MName:new("mt", argA[i])
+      if (not mname:isloaded()) then
+         setWarningFlag()
+         break
+      end
+   end
+end
+
 --------------------------------------------------------------------------
--- Keyword(): Use the list of user requested keywords to be searched
---            through the spider cache.
-
-
+-- Use the list of user requested keywords to be searched
+-- through the spider cache.
 function Keyword(...)
    dbg.start{"Keyword(",concatTbl({...},","),")"}
 
-   local master  = Master:master()
-   local shell   = master.shell
-   local cache   = Cache:cache()
-   local moduleT = cache:build()
-   local s
-   local dbT = {}
-   local spider = Spider:new()
-   spider:searchSpiderDB({...},{"default"},moduleT, dbT)
-   local a = {}
-   local ia = 0
+   local banner                 = Banner:singleton()
+   local border                 = banner:border(0)
+   local shell                  = _G.Shell
+   local cache                  = Cache:singleton{buildCache=true}
+   local moduleT,dbT,
+         mpathMapT, providedByT = cache:build()
+   local spider                 = Spider:new()
+   local a                      = {}
+   local ia                     = 0
+   local masterTbl              = masterTbl()
+   local terse                  = masterTbl.terse
+   local kywdT                  = spider:searchSpiderDB(pack(...), dbT)
 
-   local border = banner:border(0)
+   if (terse) then
+      shell:echo(Spider:Level0_terse(kywdT))
+      dbg.fini("Keyword")
+      return
+   end
 
-   ia = ia+1; a[ia] = "\n"
-   ia = ia+1; a[ia] = border
-   ia = ia+1; a[ia] = "The following modules match your search criteria: \""
-   ia = ia+1; a[ia] = concatTbl({...},"\", \"")
-   ia = ia+1; a[ia] = "\"\n"
-   ia = ia+1; a[ia] = border
-   ia = ia+1; a[ia] = "\n"
+   ia = ia+1; a[ia] = i18n("keyword_msg",{border=border, module_list = concatTbl({...},"\", \"")})
 
-   spider:Level0Helper(dbT,a)
-   
+   dbg.printT("kywdT",kywdT)
+
+   spider:Level0Helper(kywdT,providedByT,a)
+
    shell:echo(concatTbl(a,""))
 
    dbg.fini("Keyword")
 end
 
 --------------------------------------------------------------------------
--- List(): List the loaded modulefile
-
-
+-- List the loaded modulefile
 function List(...)
    dbg.start{"List(...)"}
    local masterTbl = masterTbl()
-   local shell     = Master:master().shell
-   local mt = MT:mt()
-   local totalA = mt:list("userName","any")
-   if (#totalA < 1) then
-      LmodMessage("No modules loaded\n")
+   local shell     = _G.Shell
+   local frameStk  = FrameStk:singleton()
+   local mt        = frameStk:mt()
+   local activeA   = mt:list("fullName","active")
+   local inactiveA = mt:list("fullName","inactive")
+   local total     = #activeA + #inactiveA
+   local cwidth    = masterTbl.rt and LMOD_COLUMN_TABLE_WIDTH or TermWidth()
+
+   dbg.print{"#activeA:   ",#activeA,"\n"}
+   dbg.print{"#inactiveA: ",#inactiveA,"\n"}
+
+   activeA = hook.apply("listHook",activeA) or activeA
+
+   if (total < 1) then
+      shell:echo(i18n("noModsLoaded"))
       dbg.fini("List")
       return
    end
 
    local wanted = pack(...)
 
-   local msg     = "Currently Loaded Modules"
-   local activeA = mt:list("short","active")
+   local msg     = i18n("currLoadedMods")
    local a       = {}
    local b       = {}
    local msg2    = ":"
@@ -216,7 +299,7 @@ function List(...)
       wanted[1] = ".*"
       wanted.n  = 1
    else
-      msg2 = " Matching: " .. table.concat(wanted," or ")
+      msg2 = i18n("matching",{wanted = table.concat(wanted," or ")})
       if (not masterTbl.regexp) then
          for i = 1, wanted.n do
             wanted[i] = wanted[i]:caseIndependent()
@@ -226,13 +309,11 @@ function List(...)
 
    if (masterTbl.terse) then
       for i = 1,#activeA do
-         local mname = MName:new("mt",activeA[i])
-         local sn    = mname:sn()
-         local full  = mt:fullName(sn)
+         local fullName = activeA[i].fullName
          for j = 1, wanted.n do
             local p = wanted[j]
-            if (full:find(p)) then
-               io.stderr:write(full,"\n")
+            if (fullName:find(p)) then
+               shell:echo(fullName.."\n")
             end
          end
       end
@@ -248,29 +329,30 @@ function List(...)
    local kk = 0
    local legendT = {}
    for i = 1, #activeA do
-      local mname = MName:new("mt",activeA[i])
-      local sn    = mname:sn()
-      local full  = mt:fullName(sn)
+      local entry    = activeA[i]
+      local fullName = entry.fullName
       for j = 1, wanted.n do
          local p = wanted[j]
-         if (full:find(p)) then
+         if (fullName:find(p)) then
             kk = kk + 1
-            a[#a + 1] = mt:list_property(kk, sn, "short", legendT)
+            a[#a + 1] = mt:list_property(kk, entry.sn, "short", legendT)
          end
       end
    end
 
    if (kk == 0) then
-      b[#b+1] = "  None found.\n"
+      b[#b+1] = i18n("noneFound")
    else
-      local ct = ColumnTable:new{tbl=a, gap=0, len=length}
-      b[#b+1] = ct:build_tbl()
-      b[#b+1] = "\n"
+      if (#a > 0) then
+         local ct = ColumnTable:new{tbl=a, gap=0, len=length, width=cwidth}
+         b[#b+1] = ct:build_tbl()
+         b[#b+1] = "\n"
+      end
    end
 
    if (next(legendT)) then
       local term_width = TermWidth()
-      b[#b+1] = "\n  Where:\n"
+      b[#b+1] = i18n("Where")
       a = {}
       for k, v in pairsByKeys(legendT) do
          a[#a+1] = { "   " .. k ..":", v}
@@ -282,47 +364,39 @@ function List(...)
    a = {}
    kk = 0
 
-   for i = 1, #totalA do
-      local v = totalA[i]
-      if (not mt:have(v.sn,"active")) then
-         local name = v.name
-         for j = 1, wanted.n do
-            local p = wanted[j]
-            if (name:find(p)) then
-               kk      = kk + 1
-               a[#a+1] = {"  " .. tostring(kk).. ")" , name}
-            end
+   for i = 1, #inactiveA do
+      local entry    = inactiveA[i]
+      local fullName = entry.fullName
+      local userName = entry.userName
+      for j = 1, wanted.n do
+         local p = wanted[j]
+         if (fullName:find(p)) then
+            kk      = kk + 1
+            a[#a+1] = {"  " .. tostring(kk).. ")" , userName}
          end
       end
    end
 
    if (#a > 0) then
-      b[#b+1] = "\nInactive Modules"
+      b[#b+1] = i18n("Inactive")
       b[#b+1] = msg2
       b[#b+1] = "\n"
-      local ct = ColumnTable:new{tbl=a,gap=0}
+      local ct = ColumnTable:new{tbl=a,gap=0, width = cwidth}
       b[#b+1] = ct:build_tbl()
       b[#b+1] = "\n"
    end
 
-   local aa = {}
-   aa = hook.apply("msgHook","list",aa)
-   if (#aa > 0) then
-      b[#b+1] = concatTbl(aa,"")
-   end
+   b = hook.apply("msgHook","list",b) or b
+
    shell:echo(concatTbl(b,""))
    dbg.fini("List")
 end
 
 
 ------------------------------------------------------------------------
--- Load_Try():  load modules from users but do not issue warnings
---              if the module is not there.
-
+-- Load modules from users but do not issue warnings if the module is
+-- not there.
 function Load_Try(...)
-   local master = Master:master()
-   local mt     = MT:mt()
-
    dbg.start{"Load_Try(",concatTbl({...},", "),")"}
    deactivateWarning()
    Load_Usr(...)
@@ -331,37 +405,38 @@ function Load_Try(...)
 end
 
 ------------------------------------------------------------------------
--- Load_Usr():  load modules from users.  If a module name has
---              a minus sign in front of it then unload it.  Do that
---              before loading any other modules.  Also if the
---              shortName of a request module is already loaded then
---              unload it.  This way:
---                   $ module load foo/1.1; module load foo/1.3
---              the second load of "foo" will not load it twice.
---              Finally any successful loading of a module is registered
---              with "MT" so that when a user does the above commands
---              it won't get the swap message.
-
+-- Load modules from users.  If a module name has
+-- a minus sign in front of it then unload it.  Do that
+-- before loading any other modules.  Also if the
+-- shortName of a request module is already loaded then
+-- unload it.  This way:
+--
+--      $ module load foo/1.1; module load foo/1.3
+--
+-- the second load of "foo" will not load it twice.
+-- Finally any successful loading of a module is registered
+-- with "MT" so that when a user does the above commands
+-- it won't get the swap message.
 function Load_Usr(...)
-   LMOD_IGNORE_CACHE = true
-   local master = Master:master()
-   local mt     = MT:mt()
-
+   local frameStk = FrameStk:singleton()
    dbg.start{"Load_Usr(",concatTbl({...},", "),")"}
-   local uA = {}
-   local lA = {}
-   local arg = pack(...)
-   for i = 1, arg.n do
-      local v = arg[i]
+   local uA   = {}
+   local lA   = {}
+   local argA = pack(...)
+   for i = 1, argA.n do
+      local v = argA[i]
+      if (v == "-") then
+         LmodMessage{msg="e_Illegal_option",v=v}
+         os.exit(1)
+      end
+
       if (v:sub(1,1) == "-") then
-         uA[#uA+1] = MName:new("mt", v:sub(2))
+         uA[#uA+1] = MName:new("mt", v:sub(2,-1))
       else
          if (v:sub(1,1) == "+") then
-            v = v:sub(2)
+            v = v:sub(2,-1)
          end
-         local mname = MName:new("load",v)
-         local sn    = mname:sn()
-         lA[#lA+1]   = mname
+         lA[#lA+1]   = MName:new("load",v)
       end
    end
 
@@ -369,18 +444,20 @@ function Load_Usr(...)
       MCP:unload_usr(uA)
    end
 
+   local varT     = frameStk:varT()
    local b
    if (#lA > 0) then
-      if (varTbl[ModulePath] == nil or
-             varTbl[ModulePath]:expand() == false or
-             varTbl[ModulePath]:expand() == "" ) then
-         LmodWarning("MODULEPATH is undefined\n")
+      if (varT[ModulePath] == nil or
+          varT[ModulePath]:expand() == false or
+          varT[ModulePath]:expand() == "" ) then
+         LmodWarning{msg="w_Undef_MPATH"}
       end
 
       local mcp_old = mcp
       mcp           = MCP
       dbg.print{"Setting mcp to ", mcp:name(),"\n"}
       b             = mcp:load_usr(lA)
+
       if (haveWarnings()) then
          mcp.mustLoad()
       end
@@ -391,16 +468,22 @@ function Load_Usr(...)
    return b
 end
 
---------------------------------------------------------------------------
--- Purge():  unload all loaded modules
+function Purge_Usr()
+   dbg.start{"Purge_Usr()"}
+   Purge()
+   dbg.fini("Purge_Usr")
+end
 
+
+--------------------------------------------------------------------------
+-- Unload all loaded modules.
+-- @param force If true then sticky modules are unloaded as well.
 function Purge(force)
-   local master = Master:master()
-   local mt     = MT:mt()
-   local totalA  = mt:list("short","any")
+   local frameStk = FrameStk:singleton()
+   local mt       = frameStk:mt()
+   local totalA   = mt:list("short","any")
 
    if (#totalA < 1) then
-      clearWarningFlag()
       return
    end
 
@@ -422,56 +505,41 @@ function Purge(force)
 end
 
 --------------------------------------------------------------------------
--- RecordCmd(): Write the current state of the module table to the
---              lmod-save directory.  This command should probably go away.
-
-function RecordCmd()
-   dbg.start{"RecordCmd()"}
-   local mt   = MT:mt()
-   local s    = serializeTbl{indent=true, name="_ModuleTable_",
-                             value=_ModuleTable_}
-   local uuid = UUIDString(epoch())
-   local fn   = pathJoin(usrSaveDir, uuid .. ".lua")
-
-   local d = dirname(fn)
-   local attr = lfs.attributes(d)
-   if (not attr) then
-      mkdir_recursive(d)
-   end
-
-   local f = io.open(fn,"w")
-   if (f) then
-      f:write(s)
-      f:close()
-   end
-   dbg.fini("RecordCmd")
-end
-
---------------------------------------------------------------------------
--- Refresh(): reload all loaded modules so that any alias or shell
---            functions are defined.  No other module commands are active.
---            This command exists so that sub-shells will have the aliases
---            defined.
-
-
+-- Reload all loaded modules so that any alias or shell
+-- functions are defined.  No other module commands are active.
+-- This command exists so that sub-shells will have the aliases
+-- defined.
 function Refresh()
    dbg.start{"Refresh()"}
-   local master  = Master:master()
+   local master  = Master:singleton()
    master:refresh()
    dbg.fini("Refresh")
 end
 
 --------------------------------------------------------------------------
--- Reset():  Reset all module commands back to the system defined default
---           value in env. var. LMOD_SYSTEM_DEFAULT_MODULES.  If that
---           variable is not defined then there are no default modules
---           and this command is the same as a purge.
-
+-- Reset all module commands back to the system defined default
+-- value in env. var. LMOD_SYSTEM_DEFAULT_MODULES.  If that
+-- variable is not defined then there are no default modules
+-- and this command is the same as a purge.
+-- @param msg If true then print resetting message.
 function Reset(msg)
    dbg.start{"Reset()"}
+   local default = os.getenv("LMOD_SYSTEM_DEFAULT_MODULES") or ""
+   if (default == "") then
+      if (not quiet()) then
+         io.stderr:write(i18n("w_SYS_DFLT_EMPTY",{}))
+      end
+      LmodErrorExit()
+      dbg.fini("Reset")
+      return
+   end
+
    local force = true
    Purge(force)
-   local default = os.getenv("LMOD_SYSTEM_DEFAULT_MODULES") or ""
+
+   -- Change MODULEPATH back to systemBaseMPATH
+   FrameStk:singleton():resetMPATH2system()
+
    dbg.print{"default: \"",default,"\"\n"}
 
    default = default:trim()
@@ -479,14 +547,7 @@ function Reset(msg)
    default = default:gsub(" +",":")
 
    if (msg ~= false) then
-      io.stderr:write("Resetting modules to system default\n")
-   end
-
-   if (default == "") then
-      io.stderr:write("\nThe system default contains no modules\n")
-      io.stderr:write("  (env var: LMOD_SYSTEM_DEFAULT_MODULES is empty)\n\n")
-      dbg.fini("Reset")
-      return
+      io.stderr:write(i18n("m_Reset_SysDflt",{}))
    end
 
 
@@ -502,19 +563,19 @@ function Reset(msg)
 end
 
 --------------------------------------------------------------------------
--- Restore(): Restore the state of the user's loaded modules original
---            state. If a user has a "default" then use that collection.
---            Otherwise do a "Reset()"
-
-function Restore(a)
-   dbg.start{"Restore(",a,")"}
+-- Restore the state of the user's loaded modules original
+-- state. If a user has a "default" then use that collection.
+-- Otherwise do a "Reset()"
+-- @param collection The user supplied collection name. If *nil* the use "default"
+function Restore(collection)
+   dbg.start{"Restore(",collection,")"}
 
    local msg
    local path
    local myName  = "default"
-   local sname   = LMOD_SYSTEM_NAME
+   local sname   = system_name
    local msgTail = ""
-   if (sname == nil) then
+   if (not sname) then
       sname   = ""
       myName  = "(empty)"
    else
@@ -522,74 +583,93 @@ function Restore(a)
       sname   = "." .. sname
    end
 
-   if (a == nil) then
+   if (collection == nil) then
       path = pathJoin(os.getenv("HOME"), ".lmod.d", "default" .. sname)
       if (not isFile(path)) then
-         a = "system"
-         myName = a 
+         collection = "system"
+         myName = collection
       else
          myName = "default"
       end
-   elseif (a ~= "system") then
-      myName = sname
-      path   = pathJoin(os.getenv("HOME"), ".lmod.d", a .. sname)
+   elseif (collection ~= "system") then
+      myName = collection
+      path   = pathJoin(os.getenv("HOME"), ".lmod.d", collection .. sname)
       if (not isFile(path)) then
-         LmodError(" User module collection: \"",a,"\" does not exist.\n",
-                   " Try \"module savelist\" for possible choices.\n")
+         LmodError{msg="e_Unknown_Coll", collection = collection}
       end
    end
 
+   if (barefilename(myName):find("%.")) then
+      LmodError{msg="e_No_Period_Allowed", collection = collection}
+   end
+
+
    local masterTbl = masterTbl()
 
-   if (a == "system" ) then
+   if (collection == "system" ) then
       msg = "system default" .. msgTail
    else
-      a   = a or "default"
-      msg = "user's ".. a .. msgTail
+      collection = collection or "default"
+      msg        = "user's ".. collection .. msgTail
    end
 
    if (masterTbl.quiet or masterTbl.initial) then
       msg = false
    end
 
-   if (a == "system" ) then
+   if (collection == "system" ) then
       Reset(msg)
    else
-      local mt      = MT:mt()
-      local results = mt:getMTfromFile{fn=path, name=myName, msg=msg} or Reset(msg)
+      local mt      = FrameStk:singleton():mt()
+      local results = mt:getMTfromFile{fn=path, name=myName, msg=msg}
+      if (not results and collection == "default") then
+         Reset(msg)
+      end
    end
+
+   local mt      = FrameStk:singleton():mt()
+   dbg.print{"mt: ",tostring(mt),"\n"}
+
+
+   hook.apply("restore", {collection=collection, name=myName, fn=path})
 
    dbg.fini("Restore")
 end
 
 --------------------------------------------------------------------------
--- Save(): Save the current list of modules to whatever name the user
---         gave on the command line or "default" if there is none.
---         Note that this function checks to see if any of the currently
---         loaded modules mix load statements with the setting of
---         environment variables.  In that case, Lmod will not save the
---         state of the modules into a collection.  The reasons are
---         complicated but a "manager" module file is "fake" loaded so
---         that any setenv or prepend_path commands will not be executed.
-
+-- Save the current list of modules to whatever name the user
+-- gave on the command line or "default" if there is none.
+-- Note that this function checks to see if any of the currently
+-- loaded modules mix load statements with the setting of
+-- environment variables.  In that case, Lmod will not save the
+-- state of the modules into a collection.  The reasons are
+-- complicated but a "manager" module file is "fake" loaded so
+-- that any setenv or prepend_path commands will not be executed.
 function Save(...)
    local masterTbl = masterTbl()
-   local mt        = MT:mt()
+   local frameStk  = FrameStk:singleton()
+   local mt        = frameStk:mt()
    local a         = select(1, ...) or "default"
    local path      = pathJoin(os.getenv("HOME"), LMODdir)
    dbg.start{"Save(",concatTbl({...},", "),")"}
 
    local msgTail = ""
-   local sname   = LMOD_SYSTEM_NAME
-   if (sname == nil) then
+   local sname   = system_name
+   if (not sname) then
       sname   = ""
    else
-      msgTail = ", for system: \"".. sname .. "\""
+      msgTail = i18n("m_For_System",{sname = sname})
       sname   = "." .. sname
    end
 
+   if (barefilename(a):find("%.")) then
+      LmodWarning{msg="w_No_dot_Coll",name=a}
+      dbg.fini("Save")
+      return
+   end
+
    if (a == "system") then
-      LmodWarning("The named collection 'system' is reserved. Please choose another name.\n")
+      LmodWarning{msg="w_System_Reserved"}
       dbg.fini("Save")
       return
    end
@@ -597,9 +677,7 @@ function Save(...)
    local activeA = mt:list("short","active")
    local force   = masterTbl.force
    if (#activeA == 0 and not force) then
-      LmodWarning("You are trying to save an empty collection of modules in \"",a,
-                  "\".  If this is what you want then enter: \n",
-                  "   module --force save ",a,"\n")
+      LmodWarning{msg="w_Save_Empty_Coll",name=a}
       dbg.fini("Save")
       return
    end
@@ -613,6 +691,8 @@ function Save(...)
       os.rename(path, path .. "~")
    end
    mt:setHashSum()
+   local varT = frameStk:varT()
+   mt:setMpathRefCountT(varT[ModulePath]:refCountT())
 
    local f  = io.open(path,"w")
    if (f) then
@@ -623,25 +703,25 @@ function Save(...)
       f:write(s0,s1)
       f:close()
    end
+   mt:hideMpathRefCountT()
    mt:hideHash()
    if (not quiet()) then
-      io.stderr:write("Saved current collection of modules to: ",a,
-                      msgTail, "\n")
+      LmodMessage{msg="m_Save_Coll",a=a, msgTail=msgTail}
    end
    dbg.fini("Save")
 end
 
 
 --------------------------------------------------------------------------
--- SaveList(): report to the user all the named collections he/she has.
-
+-- Report to the user all the named collections he/she has.
 function SaveList(...)
-   local mt        = MT:mt()
+   local mt        = FrameStk:singleton():mt()
    local path      = pathJoin(os.getenv("HOME"), LMODdir)
    local masterTbl = masterTbl()
    local a         = {}
    local b         = {}
-   local shell     = Master:master().shell
+   local shell     = _G.Shell
+   local cwidth    = masterTbl.rt and LMOD_COLUMN_TABLE_WIDTH or TermWidth()
 
    findNamedCollections(b,path)
    if (masterTbl.terse) then
@@ -651,7 +731,7 @@ function SaveList(...)
          if (i) then
             name = name:sub(j+2)
          end
-         io.stderr:write(name,"\n")
+         shell:echo(name.."\n")
       end
       return
    end
@@ -667,49 +747,46 @@ function SaveList(...)
       a[#a+1] = cstr .. name
    end
 
-   local b = {}
+   b            = {}
+   local msgHdr = ""
+   if (system_name) then
+      msgHdr = i18n("lmodSystemName",{name = system_name})
+   end
+
    if (#a > 0) then
-      b[#b+1]  = "Named collection list:\n"
-      local ct = ColumnTable:new{tbl=a,gap=0}
+      b[#b+1]  = i18n("namedCollList",{msgHdr = msgHdr})
+      local ct = ColumnTable:new{tbl=a,gap=0,width=cwidth}
       b[#b+1]  = ct:build_tbl()
       b[#b+1]  = "\n"
       shell:echo(concatTbl(b,""))
    else
-      io.stderr:write("No Named collections.\n")
+      io.stderr:write(i18n("m_No_Named_Coll",{}))
    end
 end
 
 --------------------------------------------------------------------------
--- SearchCmd(): Point users to either spider or keyword
-
+-- Point users to either spider or keyword
 function SearchCmd(...)
-   local s = concatTbl({...}, " ")
-   io.stderr:write("\"module search\" does not exist. To list all possible modules do: \n",
-                   "   module spider ",s,"\n\n",
-                   "To search the contents of modules for matching words do:\n",
-                   "   module keyword ",s,"\n")
+   LmodMessage{msg="m_No_Search_Cmd", s = concatTbl({...}, " ")}
 end
 
-
-
-
 --------------------------------------------------------------------------
--- Show(): use the show mode of MasterControl to list the active Lmod
---         commands in a module file.  Note that it is always in Lua
---         even if the modulefile is written in TCL.
-
+-- Use the show mode of MasterControl to list the active Lmod
+-- commands in a module file.  Note that it is always in Lua
+-- even if the modulefile is written in TCL.
 function Show(...)
-   local master = Master:master()
+   local master = Master:singleton()
+   local banner = Banner:singleton()
    dbg.start{"Show(", concatTbl({...},", "),")"}
 
    mcp = MasterControl.build("show")
    local borderStr = banner:border(0)
 
-   prtHdr       = function()
-                     local a = {}  
+   _G.prtHdr     = function()
+                     local a = {}
                      a[#a+1] = borderStr
                      a[#a+1] = "   "
-                     a[#a+1] = ModuleFn
+                     a[#a+1] = _G.ModuleFn
                      a[#a+1] = ":\n"
                      a[#a+1] = borderStr
                      return concatTbl(a,"")
@@ -719,38 +796,33 @@ function Show(...)
 end
 
 --------------------------------------------------------------------------
--- SpiderCmd(): Do a level 0 spider report if there are no command line
---              arguments.  Otherwise do a spider search to generate a
---              level 1 or level 2 report on particular modules.
-
+-- Do a level 0 spider report if there are no command line
+-- arguments.  Otherwise do a spider search to generate a
+-- level 1 or level 2 report on particular modules.
 function SpiderCmd(...)
    dbg.start{"SpiderCmd(", concatTbl({...},", "),")"}
-   local cache     = Cache:cache()
-   local shell     = Master:master().shell
-   local moduleT   = cache:build()
-   local masterTbl = masterTbl()
-   local dbT       = {}
+   local cache                  = Cache:singleton{buildCache=true}
+   local shell                  = _G.Shell
+   local masterTbl              = masterTbl()
+   local spiderT,dbT,
+         mpathMapT, providedByT = cache:build()
+   local spider                 = Spider:new()
+   local argA                   = pack(...)
    local s
    local srch
-   local spider    = Spider:new()
-   spider:buildSpiderDB({"default"},moduleT, dbT)
 
-   local arg = pack(...)
 
-   if (arg.n < 1) then
-      s = spider:Level0(dbT)
+   if (argA.n < 1) then
+      s = spider:Level0(dbT, providedByT)
    else
-      local a    = {}
-      local help = false
-      for i = 1, arg.n-1 do
-         a[#a+1] = spider:spiderSearch(dbT, arg[i], help)
+      local a       = {}
+      for i = 1, argA.n do
+         a[#a+1] = spider:spiderSearch(dbT, providedByT, argA[i], i == argA.n)
       end
-      a[#a+1] = spider:spiderSearch(dbT, arg[arg.n], true)
       s = concatTbl(a,"")
    end
-
    if (masterTbl.terse) then
-      io.stderr:write(s,"\n")
+      shell:echo(s.."\n")
    else
       local a = {}
       a[#a+1] = s
@@ -762,12 +834,10 @@ function SpiderCmd(...)
 end
 
 --------------------------------------------------------------------------
---  Swap(): Swap one module for another.  That is unload the first
---          and load the second.  If the second modulefile is successfully
---          loaded then it is registered with MT so that it won't be
---          reported in a swap message.
-
-
+--  Swap one module for another.  That is unload the first
+--  and load the second.  If the second modulefile is successfully
+--  loaded then it is registered with MT so that it won't be
+--  reported in a swap message.
 function Swap(...)
    local a = select(1, ...) or ""
    local b = select(2, ...) or ""
@@ -780,11 +850,11 @@ function Swap(...)
       b = a
    end
 
-   local mt    = MT:mt()
+   local mt    = FrameStk:singleton():mt()
    local mname = MName:new("mt", a)
    local sn    = mname:sn()
    if (not mt:have(sn,"any")) then
-      LmodError("Swap failed: \"",a,"\" is not loaded.\n")
+      LmodError{msg="e_Swap_Failed", name = a}
    end
 
    local mA      = {}
@@ -794,16 +864,16 @@ function Swap(...)
    mA[1]         = mname
    mcp:unload(mA)
    mA[1]         = MName:new("load",b)
-   local aa = mcp:load_usr(mA)
-   if (not aa[1]) then
-      LmodError("Swap failed.\n")
+   local status = mcp:load_usr(mA)
+   if (not status) then
+      mcp.mustLoad()
    end
 
    ------------------------------------------------------
    -- Register user loads so that Karl will be happy.
 
-   local mname = mA[1]
-   local sn    = mname:sn()
+   mname       = mA[1]
+   sn          = mname:sn()
    local usrN  = (not masterTbl().latest) and b or mt:fullName(sn)
    mt:userLoad(sn,usrN)
    mcp = mcp_old
@@ -812,18 +882,17 @@ function Swap(...)
 end
 
 --------------------------------------------------------------------------
---  TableList(): list the loaded modules in a lua table
-
+--  list the loaded modules in a lua table
 function TableList()
    dbg.start{"TableList()"}
-   local mt = MT:mt()
+   local mt  = FrameStk:singleton():mt()
 
    local t = {}
    local activeA = mt:list("short","active")
    for i,v  in ipairs(activeA) do
       local mname   = MName:new("mt",v)
       local sn      = mname:sn()
-      local version = mname:version()
+      local version = mname:version() or ""
       dbg.print{"sn: ",sn,", version: ",version,"\n"}
       t[sn] = version
    end
@@ -833,79 +902,102 @@ function TableList()
 end
 
 --------------------------------------------------------------------------
---  Update(): reload all modules.
+-- Disable a collection
+function Disable(...)
+   local shell = _G.Shell
+   local path  = pathJoin(os.getenv("HOME"), LMODdir)
+   local argA  = pack(...)
+   local sname = (not system_name) and "" or "." .. system_name
 
+   if (argA.n == 0) then
+      argA[1] = "default"
+      argA.n  = 1
+   end
+
+   for i = 1,argA.n do
+      local name  = argA[i]
+      local fn    = pathJoin(path,name .. sname)
+      local fnNew = fn .. "~"
+      os.rename(fn, fnNew)
+      shell:echo(i18n("m_Collection_disable",{name=name}))
+   end
+end
+
+
+--------------------------------------------------------------------------
+--  Reload all modules.
 function Update()
-   local master = Master:master()
-   master:reloadAll()
+   local master = Master:singleton()
+   local force_update = true
+   master:reloadAll(force_update)
 end
 
 --------------------------------------------------------------------------
---  Use(): add a directory to MODULEPATH and LMOD_DEFAULT_MODULEPATH.
---         Note that this causes all the modules to be reviewed and
---         possibly reloaded if a module.
-
+--  Add a directory to MODULEPATH and LMOD_DEFAULT_MODULEPATH.
+--  Note that this causes all the modules to be reviewed and
+--  possibly reloaded if a module.
 function Use(...)
-   local mt  = MT:mt()
-   local a = {}
-   local op = MCP.prepend_path
    dbg.start{"Use(", concatTbl({...},", "),")"}
+   local mt  = FrameStk:singleton():mt()
+   local a = {}
+   local mcp_old = mcp
+   local mcp     = MCP
+   local op = mcp.prepend_path
 
-   local arg      = pack(...)
+   local argA     = pack(...)
    local iarg     = 1
    local priority = 0
 
-   while (iarg <= arg.n) do
-      local v = arg[iarg]
+   dbg.print{"using mcp: ",mcp:name(), "\n"}
+
+   while (iarg <= argA.n) do
+      local v = argA[iarg]
       local w = v:lower()
       if (w == "-a" or w == "--append" ) then
-         op = MCP.append_path
+         op = mcp.append_path
       elseif (w == "--priority") then
          iarg     = iarg + 1
-         priority = tonumber(arg[iarg])
+         priority = tonumber(argA[iarg])
       else
          a[#a + 1] = v
       end
       iarg = iarg + 1
    end
-   local nodups = true
    for _,v in ipairs(a) do
-      v = abspath(v)
-      if (v) then
-         op(MCP, { ModulePath,  v, delim = ":", nodups=nodups, priority=priority })
-         op(MCP, { DfltModPath, v, delim = ":", nodups=nodups, priority=priority })
-      end
+      op(mcp, { ModulePath,  v, delim = ":", nodups=true, priority=priority })
    end
 
-
-   mt:buildBaseMpathA(varTbl[DfltModPath]:expand())
-   mt:buildMpathA(varTbl[ModulePath]:expand())
+   local master    = Master:singleton()
+   if (mt:changeMPATH()) then
+      mt:reset_MPATH_change_flag()
+      master.reloadAll()
+   end
+   mcp = mcp_old
    dbg.fini("Use")
 end
 
 --------------------------------------------------------------------------
---  UnUse(): remove a directory from both MODULEPATH and
---           LMOD_DEFAULT_MODULEPATH.  Note that all currently loaded
---           modules reviewed and possibly reloaded or made inactive.
-
+--  Remove a directory from both MODULEPATH and
+--  LMOD_DEFAULT_MODULEPATH.  Note that all currently loaded
+--  modules reviewed and possibly reloaded or made inactive.
 function UnUse(...)
-   local mt  = MT:mt()
    dbg.start{"UnUse(", concatTbl({...},", "),")"}
-   local arg = pack(...)
+   local mt     = FrameStk:singleton():mt()
+   local argA   = pack(...)
    local nodups = true
-   for i = 1, arg.n do
-      local v = arg[i]
-      MCP:remove_path{ ModulePath,  v, delim=":", nodups = true}
-      MCP:remove_path{ DfltModPath, v, delim=":", nodups = true}
+   for i = 1, argA.n do
+      local v = argA[i]
+      MCP:remove_path{ModulePath,  v, delim=":", nodups = true, force = true}
    end
-   mt:buildBaseMpathA(varTbl[DfltModPath]:expand())
-   mt:reloadAllModules()
+   if (mt:changeMPATH()) then
+      mt:reset_MPATH_change_flag()
+      master.reloadAll()
+   end
    dbg.fini("UnUse")
 end
 
 --------------------------------------------------------------------------
---  UnLoad():  unload all requested modules
-
+-- Unload all requested modules
 function UnLoad(...)
    dbg.start{"UnLoad(",concatTbl({...},", "),")"}
    MCP:unload_usr(MName:buildA("mt", ...))
@@ -913,8 +1005,7 @@ function UnLoad(...)
 end
 
 --------------------------------------------------------------------------
---  Whatis(): Run whatis on all request modules given the the command line.
-
+-- Run whatis on all request modules given the the command line.
 function Whatis(...)
    prtHdr    = function () return "" end
    Access("whatis",...)

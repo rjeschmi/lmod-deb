@@ -8,6 +8,9 @@
 --
 -- @classmod Options
 
+_G._DEBUG          = false               -- Required by the new lua posix
+local posix        = require("posix")
+
 require("strict")
 
 --------------------------------------------------------------------------
@@ -20,7 +23,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -44,18 +47,18 @@ require("strict")
 --
 --------------------------------------------------------------------------
 
-Error = nil
+local cosmic       = require("Cosmic"):singleton()
 local dbg          = require("Dbg"):dbg()
-local format       = string.format
-local posix        = require("posix")
+local i18n         = require("i18n")
 local setenv_posix = posix.setenv
 local stderr       = io.stderr
 local systemG      = _G
-
+local concatTbl    = table.concat
 local M = {}
 
-s_options = false
-
+--------------------------------------------------------------------------
+-- Private Ctor for Option class.
+-- @param self An Option object
 local function new(self)
    local o = {}
 
@@ -64,18 +67,29 @@ local function new(self)
    return o
 end
 
+--------------------------------------------------------------------------
+-- This function forces the option parser to write to stderr instead of
+-- stdout.
 local function prt(...)
    stderr:write(...)
 end
 
+
+--------------------------------------------------------------------------
+-- This function prevents the option parser from exiting when it finds an
+-- error.
 local function nothing()
 end
 
 
-function M.options(self, usage)
+--------------------------------------------------------------------------
+-- Parse the command line options. Places the options in *masterTbl*,
+-- place the positional arguments in *masterTbl.pargs*
+-- @param self An Option object.
+-- @param usage The program usage string.
+function M.singleton(self, usage)
 
    local Optiks = require("Optiks")
-   s_options = new(self)
    local cmdlineParser  = Optiks:new{usage   = usage,
                                      error   = LmodWarning,
                                      exit    = nothing,
@@ -86,7 +100,7 @@ function M.options(self, usage)
    local styleA       = {}
    local icnt         = 0
    local defaultStyle = "system"
-   
+
    for s in LMOD_AVAIL_STYLE:split(":") do
       icnt = icnt + 1
       if (s:sub(1,1) == "<" and s:sub(-1,-1) == ">") then
@@ -102,7 +116,7 @@ function M.options(self, usage)
       name   = {"-h","-?","-H","--help"},
       dest   = "cmdHelp",
       action = "store_true",
-      help   = "This help message",
+      help   = i18n("help_hlp"),
    }
 
    cmdlineParser:add_option{
@@ -110,191 +124,211 @@ function M.options(self, usage)
       dest    = "availStyle",
       action  = "store",
       default = defaultStyle,
-      help    = "Site controlled avail style: "..concatTbl(styleA," ").." (default: "..defaultStyle..")"
+      help    = i18n("style_hlp",{styleA=concatTbl(styleA," "), default = defaultStyle}),
    }
 
+   cmdlineParser:add_option{
+      name   = {"--regression_testing"},
+      dest   = "rt",
+      action = "store_true",
+      help   = i18n("rt_hlp"),
+   }
 
    cmdlineParser:add_option{
       name   = {"-D"},
       dest   = "debug",
       action = "count",
-      help   = "Program tracing written to stderr",
+      help   = i18n("dbg_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"--debug"},
       dest   = "dbglvl",
       action = "store",
-      help   = "Program tracing written to stderr",
+      help   = i18n("dbg_hlp2"),
+   }
+
+   cmdlineParser:add_option{
+      name   = {"--pin_versions"},
+      dest   = "pinVersions",
+      action = "store",
+      help   = i18n("pin_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"-d","--default"},
       dest   = "defaultOnly",
       action = "store_true",
-      help   = "List default modules only when used with avail"
+      help   = i18n("avail_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"-q","--quiet"},
       dest   = "quiet",
       action = "store_true",
-      help   = "Do not print out warnings",
-   }
-
-   cmdlineParser:add_option{
-      name   = {"--topic"},
-      dest   = "topic",
-      action = "store",
-      help   = "help topics: modfuncs envvars",
+      help   = i18n("quiet_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"--expert"},
       dest   = "expert",
       action = "store_true",
-      help   = "Expert mode",
+      help   = i18n("exprt_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"-t","--terse"},
       dest   = "terse",
       action = "store_true",
-      help   = "Write out in machine readable format for " ..
-               "commands: list, avail, spider, savelist",
+      help   = i18n("terse_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"--initial_load"},
       dest   = "initial",
       action = "store_true",
-      help   = "loading Lmod for first time in a user shell",
+      help   = i18n("initL_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"--latest"},
       dest   = "latest",
       action = "store_true",
-      help   = "Load latest (ignore default)",
+      help   = i18n("latest_H"),
    }
 
    cmdlineParser:add_option{
       name   = {"--ignore_cache"},
       dest   = "ignoreCache",
       action = "store_true",
-      help   = "Treat the cache file(s) as out-of-date",
+      help   = i18n("cache_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"--novice"},
       dest   = "novice",
       action = "store_true",
-      help   = "Turn off expert and quiet flag",
+      help   = i18n("novice_H")
    }
 
    cmdlineParser:add_option{
       name   = {"--raw"},
       dest   = "rawDisplay",
       action = "store_true",
-      help   = "Print modulefile in raw output when used with show",
+      help   = i18n("raw_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"-w","--width"},
       dest   = "twidth",
       action = "store",
-      help   = "Use this as max term width",
+      help   = i18n("width_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"-v","--version"},
       dest   = "version",
       action = "store_true",
-      help   = "Print version info and quit",
+      help   = i18n("v_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"-r","--regexp"},
       dest   = "regexp",
       action = "store_true",
-      help   = "use regular expression match",
+      help   = i18n("rexp_hlp"),
+   }
+
+   cmdlineParser:add_option{
+      name   = {"--gitversion"},
+      dest   = "gitversion",
+      action = "store_true",
+      help   = i18n("gitV_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"--dumpversion"},
       dest   = "dumpversion",
       action = "store_true",
-      help   = "Dump version in a machine readable way and quit",
-   }
-
-   cmdlineParser:add_option{
-      name   = {"--localvar"},
-      dest   = "localvarA",
-      action = "append",
-      help   = "local variables needed to be set after this commands execution",
+      help   = i18n("dumpV_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"--check_syntax", "--checkSyntax"},
       dest   = "checkSyntax",
       action = "store_true",
-      help   = "Checking module command syntax: do not load",
+      help   = i18n("chkSyn_H"),
    }
 
    cmdlineParser:add_option{
       name   = {"--config" },
       dest   = "config",
       action = "store_true",
-      help   = "Report Lmod Configuration",
+      help   = i18n("config_H"),
+   }
+
+   cmdlineParser:add_option{
+       name   = {"--config_json" },
+       dest   = "configjson",
+       action = "store_true",
+       help   = i18n("jcnfig_H"),
    }
 
    cmdlineParser:add_option{
       name   = {"--mt" },
       dest   = "reportMT",
       action = "store_true",
-      help   = "Report Module Table State",
+      help   = i18n("MT_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"--timer" },
       dest   = "reportTimer",
       action = "store_true",
-      help   = "report run times",
+      help   = i18n("timer_hlp")
    }
 
    cmdlineParser:add_option{
       name   = {"--force" },
       dest   = "force",
       action = "store_true",
-      help   = "force removal of a sticky module or save an empty collection",
+      help   = i18n("force_hlp"),
    }
 
    cmdlineParser:add_option{
       name   = {"--redirect" },
       dest   = "redirect",
       action = "store_true",
-      help   = "Send the output of list, avail, spider to stdout (not stderr)",
+      help   = i18n("redirect_H")
    }
 
    cmdlineParser:add_option{
       name   = {"--no_redirect" },
       dest   = "redirect_off",
       action = "store_true",
-      help   = "Force output of list, avail and spider to stderr",
+      help   = i18n("nrdirect_H")
    }
 
    cmdlineParser:add_option{
       name   = {"--show_hidden" },
       dest   = "show_hidden",
       action = "store_true",
-      help   = "Avail and spider will report hidden modules",
+      help   = i18n("hidden_H")
    }
 
    cmdlineParser:add_option{
       name   = {"--spider_timeout" },
       dest   = "timeout",
       action = "store",
-      help   = "a timeout for spider",
+      help   = i18n("spdrT_H"),
+      default = 0.0
+   }
+
+   cmdlineParser:add_option{
+      name   = {"-T", "--trace" },
+      dest   = "trace",
+      action = "store_true",
+      help   = i18n("trace_H"),
       default = 0.0
    }
 
@@ -310,6 +344,10 @@ function M.options(self, usage)
    masterTbl.cmdHelpMsg      = ""
    if (masterTbl.cmdHelp or pargs[1] == "help" ) then
       masterTbl.cmdHelpMsg   = cmdlineParser:buildHelpMsg()
+   end
+
+   if (optionTbl.trace) then
+      cosmic:assign("LMOD_TRACING", "yes")
    end
 
    if (optionTbl.twidth) then
@@ -331,11 +369,18 @@ function M.options(self, usage)
    end
 
    if (optionTbl.redirect) then
-      LMOD_REDIRECT = "yes"
+      cosmic:assign("LMOD_REDIRECT", "yes")
    end
 
    if (optionTbl.redirect_off) then
-      LMOD_REDIRECT = "no"
+      cosmic:assign("LMOD_REDIRECT", "no")
+   end
+
+   if (optionTbl.pinVersions) then
+      cosmic:assign("LMOD_PIN_VERSIONS","yes")
+   end
+   if (optionTbl.ignoreCache) then
+      cosmic:assign("LMOD_IGNORE_CACHE", true)
    end
 end
 

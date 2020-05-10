@@ -1,0 +1,131 @@
+-- -*- lua -*-
+local testName = "modulerc"
+
+testdescript = {
+   owner   = "rtm",
+   product = "modules",
+   description = [[
+      Test modulerc
+   ]],
+   keywords = {testName },
+
+   active = 1,
+   testName = testName,
+   job_submit_method = "INTERACTIVE",
+
+   runScript = [[
+
+     . $(projectDir)/rt/common_funcs.sh
+
+     unsetMT
+     initStdEnvVars
+     numStep=0
+     COUNT=0
+     ORIG_HOME=`(cd $HOME; /bin/pwd)`
+     HOME=`/bin/pwd`
+
+
+     rm -fr _stderr.* _stdout.* err.* out.* .lmod.d .modulerc cacheDir
+
+     cp $(testDir)/dot.modulerc .modulerc
+
+     export MODULEPATH_ROOT=$(testDir)/mf
+     export MODULEPATH=$MODULEPATH_ROOT/Core
+     export LMOD_TERM_WIDTH=500
+
+
+     runLmod --version               # 1
+     runLmod load intel              # 2
+     runLmod list                    # 3
+     runLmod load intel/15           # 4
+     runLmod list                    # 5
+     runLmod load a14                # 6
+     runLmod list                    # 7
+     runLmod load a13                # 8
+     runLmod list                    # 9
+     runLmod load abinit/6           #10
+     runLmod list                    #11
+     runLmod load abinit/7           #12
+     runLmod list                    #13
+     runLmod load hidden/2.0         #14
+     runLmod list                    #15
+     runLmod -t avail                #16
+     runLmod --show_hidden avail     #17
+     export LMOD_SHORT_TIME=0
+     runLmod avail                   #18
+     unset LMOD_SHORT_TIME
+     runLmod avail                   #19
+     rm -rf .lmod.d
+
+
+
+     cat > fn << EOF
+$(outputDir)/cacheDir: $(outputDir)/last_update
+EOF
+
+     lua $(projectDir)/src/spiderCacheSupport.in.lua --descriptFn fn >> .lmodrc.lua
+     mkdir cacheDir
+     touch last_update
+     buildSpiderT $MODULEPATH > cacheDir/spiderT.lua
+     runLmod avail                    #20
+     runLmod use  $(testDir)/mf2/Core #21
+     runLmod spider dum               #22
+
+     unsetMT
+     export MODULEPATH=$(testDir)/mf/Core:$(testDir)/mf3/Core
+     runLmod load cluster             #23
+
+     rm .modulerc
+     unsetMT
+     export MODULEPATH=$(testDir)/mf4
+     runLmod avail                    #24
+
+     cp $testDir/dot.modulerc .modulerc
+     runLmod avail                    #25
+     runLmod --show_hidden avail      #26
+     runLmod load mpich a             #27
+     runLmod list                     #28
+
+     rm .modulerc
+     export LMOD_MODULERCFILE=$testDir/dot.modulerc
+     runLmod avail                    #29
+     runLmod --show_hidden avail      #30
+
+     export LMOD_MODULERCFILE=$testDir/dot.modulerc.lua
+     runLmod avail                    #31
+     runLmod --show_hidden avail      #32
+
+     
+     unset LMOD_MODULERCFILE
+     unsetMT
+     export MODULEPATH=$(testDir)/mf5
+     runLmod avail                    #33
+
+
+
+
+
+     HOME=$ORIG_HOME
+     cat _stdout.[0-9][0-9][0-9] > _stdout.orig
+     joinBase64Results  -bash  _stdout.orig _stdout.new
+     cleanUp _stdout.new out.txt
+
+     cat _stderr.[0-9][0-9][0-9] > _stderr.orig
+     cleanUp _stderr.orig err.txt
+
+     rm -f results.csv
+     wrapperDiff --csv results.csv $(testDir)/out.txt out.txt
+     wrapperDiff --csv results.csv $(testDir)/err.txt err.txt
+     testFinish -r $(resultFn) -t $(runtimeFn) results.csv
+   ]],
+
+
+   blessScript = [[
+         # perform what is needed
+   ]],
+
+   tests = {
+      { id='t1'},
+   },
+
+}
