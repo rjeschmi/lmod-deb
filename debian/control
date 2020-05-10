@@ -1,12 +1,12 @@
 Source: lmod
 Section: devel
 Priority: optional
-Maintainer: Aaron Zauner <azet@azet.org>
+Maintainer: Robert Schmidt <rjeschmi@gmail.com>
 Build-Depends: debhelper (>= 8.0.0), autotools-dev, lua5.2, lua-filesystem, lua-posix, lua-term, lua-json, tcl-dev, liblua5.2-dev
 Standards-Version: 3.9.6
 Homepage: https://www.tacc.utexas.edu/tacc-projects/lmod
-Vcs-Git: git://github.com/azet/lmod-deb.git
-Vcs-Browser: https://github.com/azet/lmod-deb
+Vcs-Git: git://github.com/rjeschmi/lmod-deb.git
+Vcs-Browser: https://github.com/rjeschmi/lmod-deb
 
 Package: lmod
 Architecture: all
