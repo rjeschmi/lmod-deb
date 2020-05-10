@@ -1,13 +1,15 @@
-diff --git a/Makefile.in b/Makefile.in
-index 296374f..7986ddf 100644
---- a/Makefile.in
-+++ b/Makefile.in
-@@ -8,7 +8,7 @@ PATH_TO_LUA	  	  := @PATH_TO_LUA@
+Index: lmod-deb/Makefile.in
+===================================================================
+--- lmod-deb.orig/Makefile.in	2020-05-10 15:06:18.116083246 -0400
++++ lmod-deb/Makefile.in	2020-05-10 15:06:30.548083379 -0400
+@@ -8,8 +8,8 @@
  version		  	  := $(shell LUA_PATH="$(srcdir)/src/?.lua;" $(PATH_TO_LUA)/lua -e "V=require('Version'); print(V.tag())")
  SITE_CONTROLLED_PREFIX    := @SITE_CONTROLLED_PREFIX@
  LMOD_ROOT                 := $(prefix)/$(package)
 -MY_PACKAGE                := $(prefix)/$(package)/$(version)
+-MY_PKG_PACKAGE            := $(prefix)/$(package)/$(package)
 +MY_PACKAGE                := $(prefix)/share/$(package)/$(version)
- MY_PKG_PACKAGE            := $(prefix)/$(package)/$(package)
++MY_PKG_PACKAGE            := $(prefix)/share/$(package)/$(package)
  
  ifneq ($(SITE_CONTROLLED_PREFIX),no)
+   LMOD_ROOT               := $(prefix)/..
