@@ -11,13 +11,16 @@
 --   Generate String:
 --      s = serializeTbl{indent=true, name="SomeName", value=luaTable}
 --
+--   Note that indent can also be an indent string (i.e. indent = "    ")
+--   which will be treated as the initial indentation.
+
 -- @module serializeTbl
 
 require("strict")
 
 ------------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -44,15 +47,42 @@ require("strict")
 require("fileOps")
 require("pairsByKeys")
 require("TermWidth")
+require("lmod_system_execute")
 
 --------------------------------------------------------------------------
 -- Convert the string value into a quoted string of some kind and boolean
 -- into true/false.
 
+local quoteA = {
+   {'[[',']]'},
+   {'[=[',']=]'},
+   {'[==[',']==]'},
+   {'[===[',']===]'},
+   {'[====[',']====]'},
+   {'[=====[',']=====]'},
+   {'[======[',']======]'},
+   {'[=======[',']=======]'},
+   {'[========[',']========]'},
+}
+   
+local function quoteValue(value)
+   for i = 1,#quoteA do
+      local left = quoteA[i][1]
+      local rght = quoteA[i][2]
+      if (not (value:find(left,1,true) or value:find(rght,1,true))) then
+         return left, rght
+      end
+   end
+   return quoteA[1][1], quoteA[1][2]
+end
+
+
 local function nsformat(value)
    if (type(value) == 'string') then
+      value = value:gsub("\\","\\\\")
       if (value:find("\n")) then
-	 value = "[[\n" .. value .. "\n]]"
+         local left, rght = quoteValue(value)
+	 value = left .. value .. rght
       else
          value = value:gsub('"','\\"')
 	 value = "\"" .. value .. "\""
@@ -63,22 +93,47 @@ local function nsformat(value)
       else
 	 value = 'false'
       end
+   elseif (type(value) == 'number') then
+      value = tostring(value)
    end
    return value
 end
 
+local keywordT = {
+   ['and']    = true,  ['break']  = true,    ['do']       = true,
+   ['else']   = true,  ['elseif'] = true,    ['end']      = true,
+   ['false']  = true,  ['for']    = true,    ['function'] = true,
+   ['if']     = true,  ['in']     = true,    ['local']    = true,
+   ['nil']    = true,  ['not']    = true,    ['or']       = true,
+   ['repeat'] = true,  ['return'] = true,    ['then']     = true,
+   ['true']   = true,  ['until']  = true,    ['while']    = true,
+}
+
+
+local function wrap_name(indent, name)
+   local str
+   if (name:find("[-+:./]") or keywordT[name] or name == " " or
+       name:sub(1,1):find("[0-9]")) then
+      str = indent .. "[\"" .. name .. "\"] "
+   else
+      str = indent .. name
+   end
+   return str
+end
+
+
 --------------------------------------------------------------------------
 -- This is the work-horse for this collections.  It is recursively for
--- sub-tables.  It also ignores keys that start with "_".
+-- sub-tables.  It also ignores keys that start with "__".
 
 local function outputTblHelper(indentIdx, name, T, a, level)
 
    -------------------------------------------------
-   -- Remove all keys in table that start with "_"
+   -- Remove all keys in table that start with "__"
 
    local t = {}
    for key in pairs(T) do
-      if (type(key) == "number" or key:sub(1,1) ~= '_') then
+      if (type(key) == "number" or key:sub(1,2) ~= '__') then
          t[key] = T[key]
       end
    end
@@ -96,16 +151,20 @@ local function outputTblHelper(indentIdx, name, T, a, level)
    -- characters or it start with a number.
    local str
    if (type(name) == 'string') then
-      if (name:find("[-+:./]") or name == "local" or name == "nil" or
-          name:sub(1,1):find("[0-9]")) then
-	 str = indent .. "[\"" .. name .. "\"] = {\n"
-      else
-	 str = indent .. name .. " = {\n"
-      end
+      str = wrap_name(indent, name) .. " = {"
    else
-      str = indent .. "{\n"
+      str = indent .. "{"
    end
    a[#a+1] = str
+   if (next(T) == nil) then
+      if (level == 0) then
+         a[#a+1] = '}\n'
+      else
+         a[#a+1] = "},\n"
+      end
+      return
+   end
+   a[#a] = a[#a] .. "\n"
 
    --------------------------------------------------
    -- Update indent
@@ -132,7 +191,7 @@ local function outputTblHelper(indentIdx, name, T, a, level)
       w       = w + indent:len()
       for i = 1,#t-1 do
          a[#a+1] = nsformat(t[i])
-         w       = w + a[#a]:len()
+         w       = w + tostring(a[#a]):len()
          a[#a+1] = ", "
          w       = w + a[#a]:len()
          if ( w > twidth) then
@@ -170,7 +229,7 @@ local function outputTblHelper(indentIdx, name, T, a, level)
 end
 
 --------------------------------------------------------------------------
--- The interface routine for this file.  Note that it returns a string 
+-- The interface routine for this file.  Note that it returns a string
 -- if no file name is given.
 -- @param options input table.
 function serializeTbl(options)
@@ -181,12 +240,15 @@ function serializeTbl(options)
    local indentIdx = -1
    if (options.indent) then
       indentIdx = 0
+      if (type(options.indent) == 'string' and options.indent:find("^  *$")) then
+         indentIdx = options.indent:len()
+      end
    end
 
    if (type(value) == "table") then
       outputTblHelper(indentIdx, options.name, options.value, a, level)
    else
-      a[#a+1] = n
+      a[#a+1] = wrap_name("",n)
       a[#a+1] = " = "
       a[#a+1] = nsformat(value)
       a[#a+1] = "\n"
@@ -201,7 +263,7 @@ function serializeTbl(options)
    local fn = options.fn
    local d  = dirname(fn)
    if (not isDir(d)) then
-      os.execute('mkdir -p ' .. d)
+      lmod_system_execute('mkdir -p ' .. d)
    end
    local f  = assert(io.open(fn, "w"))
 

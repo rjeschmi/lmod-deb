@@ -8,7 +8,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -36,15 +36,19 @@
 -- Csh: This is a derived class from BaseShell.  This classes knows how
 --      to expand the environment variable into Csh syntax.
 
+_G._DEBUG          = false
+local posix        = require("posix")
 
 require("strict")
 require("pairsByKeys")
 
-local dbg         = require("Dbg"):dbg()
-local concatTbl   = table.concat
-local stdout      = io.stdout
-local Csh	  = inheritsFrom(BaseShell)
-Csh.my_name = 'csh'
+local BaseShell    = require("BaseShell")
+local Csh          = inheritsFrom(BaseShell)
+local dbg          = require("Dbg"):dbg()
+local concatTbl    = table.concat
+local setenv_posix = posix.setenv
+local stdout       = io.stdout
+Csh.my_name        = 'csh'
 
 --------------------------------------------------------------------------
 -- Csh:alias(): Either define or undefine a Csh shell alias. Remove any
@@ -59,7 +63,7 @@ function Csh.alias(self, k, v)
    else
       v = v:gsub("%$%*","\\!*")
       v = v:gsub("%$([0-9])", "\\!:%1")
-      v = v:gsub(";%s","")
+      v = v:gsub(";%s$","")
       stdout:write("alias ",k," '",v,"';\n")
       dbg.print{   "alias ",k," '",v,"';\n"}
    end
@@ -78,11 +82,13 @@ end
 -- Csh:expandVar(): expand a single key-value pair into Csh syntax.
 
 function Csh.expandVar(self, k, v, vType)
+   if (k:find("%.")) then
+      return
+   end
    local lineA       = {}
    local middle      = ' '
-   v                 = tostring(v)
-   v                 = v:gsub("!","\\!")
-   v                 = v:doubleQuoteString()
+   v                 = tostring(v):gsub("!","\\!")
+   v                 = v:multiEscaped()
    if (vType == "local_var") then
       lineA[#lineA + 1] = "set "
       middle            = "="
@@ -98,10 +104,19 @@ function Csh.expandVar(self, k, v, vType)
    dbg.print{   line}
 end
 
+function Csh.echo(self, ...)
+   setenv_posix("LC_ALL",nil,true)
+   pcall(pager,io.stderr,...)
+   setenv_posix("LC_ALL","C",true)
+end
+
 --------------------------------------------------------------------------
 -- Csh:unset(): unset a local or env. variable.
 
 function Csh.unset(self, k, vType)
+   if (k:find("%.")) then
+      return
+   end
    local lineA       = {}
    if (vType == "local_var") then
       lineA[#lineA + 1] = "unset "
@@ -113,6 +128,15 @@ function Csh.unset(self, k, vType)
    local line = concatTbl(lineA,"")
    stdout:write(line)
    dbg.print{   line}
+end
+
+--------------------------------------------------------------------------
+-- Csh:real_shell(): Return true if the output shell is "real" or not.
+--                   This base function returns false.  Bash, Csh
+--                   and Fish should return true.
+
+function Csh.real_shell(self)
+   return true
 end
 
 return Csh

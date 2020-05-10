@@ -15,7 +15,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -43,15 +43,16 @@ require("strict")
 -- Access is the MCP mode that handles help message or whatis messages.
 -- almost all other module commands are ignored.
 
-require("strict")
+require("utils")
+require("myGlobals")
 
-Dbg                   = require("Dbg")
+local MasterControl   = require("MasterControl")
 MC_Access             = inheritsFrom(MasterControl)
 MC_Access.my_name     = "MC_Access"
 MC_Access.my_sType    = "load"
 MC_Access.my_tcl_mode = "display"
-concatTbl             = table.concat
 
+local concatTbl       = table.concat
 local A               = ShowResultsA
 local M               = MC_Access
 
@@ -61,18 +62,18 @@ M.accessT = { help = false, whatis = false}
 -- Set access mode to either help or whatis
 -- @param mode The type of access: help, or whatis.
 -- @param value Either true or false
-function M.accessMode(mode, value)
-   M.accessT[mode] = value
+function M.setAccessMode(self, mode, value)
+   self.accessT[mode] = value
 end
 
 --------------------------------------------------------------------------
 -- print Help message when assessT is in help mode
 -- @param self MC_Access object
 function M.help(self, ...)
-   local arg = { n = select('#', ...), ...}
-   if (M.accessT.help == true) then
-      for i = 1, arg.n do
-         A[#A+1] = arg[i]
+   local argA = pack(...)
+   if (self.accessT.help == true) then
+      for i = 1, argA.n do
+         A[#A+1] = argA[i]
       end
       A[#A+1] = "\n"
    end
@@ -83,8 +84,8 @@ end
 -- @param self A MC_Access object.
 -- @param msg The message string.
 function M.whatis(self, msg)
-   if (M.accessT.whatis) then
-      local nm     = ModuleName or ""
+   if (self.accessT.whatis) then
+      local nm     = FullName or ""
       local l      = nm:len()
       local nblnks
       if (l < 20) then
@@ -104,14 +105,20 @@ M.always_load          = MasterControl.quiet
 M.always_unload        = MasterControl.quiet
 M.add_property         = MasterControl.quiet
 M.append_path          = MasterControl.quiet
+M.color_banner         = MasterControl.quiet
 M.conflict             = MasterControl.quiet
+M.depends_on           = MasterControl.quiet
 M.error                = MasterControl.quiet
 M.execute              = MasterControl.execute
+M.extensions           = MasterControl.quiet
 M.family               = MasterControl.quiet
-M.inherit              = MasterControl.quiet
+M.inherit              = MasterControl.inherit
 M.load                 = MasterControl.quiet
+M.load_any             = MasterControl.quiet
 M.load_usr             = MasterControl.quiet
 M.message              = MasterControl.quiet
+M.msg_raw              = MasterControl.quiet
+M.mgrload              = MasterControl.quiet
 M.myFileName           = MasterControl.myFileName
 M.myModuleFullName     = MasterControl.myModuleFullName
 M.myModuleUsrName      = MasterControl.myModuleUsrName

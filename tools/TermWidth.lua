@@ -9,7 +9,7 @@ require("strict")
 
 -----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -34,6 +34,7 @@ require("strict")
 --------------------------------------------------------------------------
 
 
+require("haveTermSupport")
 require("capture")
 local capture = capture or function (s) return nil end
 local getenv  = os.getenv
@@ -41,9 +42,6 @@ local term    = false
 local s_width = false
 local min     = math.min
 local s_DFLT  = 80
-if (pcall(require,"term")) then
-   term = require("term")
-end
 
 ------------------------------------------------------------------------
 -- Ask system for width.
@@ -57,27 +55,18 @@ local function askSystem(width)
       return tonumber(columns)
    end
 
-   -- Try env var COLUMNS
-   columns = getenv("COLUMNS")
-   if (columns) then
-      return tonumber(columns)
-   end
-
    -- Try tput cols
-   local result = os.execute("tput cols 2> /dev/null")
-   if (result) then
-      return tonumber(capture("tput cols"))
+   if (getenv("TERM")) then
+      local result  = capture("tput cols 2> /dev/null")
+      i, j, columns = result:find("^(%d+)")
+      if (i) then
+         return tonumber(columns)
+      end
    end
 
    return width
 end
-   
---------------------------------------------------------------------------
--- Return true/false if the *term* interface exists.
 
-function haveTermSupport()
-   return (not (not term))
-end
 
 --------------------------------------------------------------------------
 -- Returns the number of columns to use as the terminal width.
@@ -86,16 +75,20 @@ function TermWidth()
    if (s_width) then
       return s_width
    end
-   s_DFLT  = tonumber(getenv("LMOD_TERM_WIDTH")) or s_DFLT
-   s_width = s_DFLT
-   if (getenv("TERM") and term and term.isatty(io.stderr)) then
+   local ltw = tonumber(getenv("LMOD_TERM_WIDTH"))
+   if (ltw) then
+      s_width = ltw
+      return s_width
+   end
+   s_DFLT    = ltw or s_DFLT
+   s_width   = s_DFLT
+   if (haveTermSupport()) then
       s_width = askSystem(s_width)
    end
 
-   local maxW = tonumber(getenv("LMOD_TERM_WIDTH")) or math.huge
+   local maxW = ltw or math.huge
 
    s_width = min(maxW, s_width)
-
    s_width = (s_width > 30) and s_width or 30
 
    return s_width

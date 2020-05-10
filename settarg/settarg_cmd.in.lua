@@ -10,7 +10,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -36,16 +36,31 @@
 
 
 local LuaCommandName = arg[0]
-local i,j = LuaCommandName:find(".*/")
+local ia,ja = LuaCommandName:find(".*/")
 local LuaCommandName_dir = "./"
-if (i) then
-   LuaCommandName_dir = LuaCommandName:sub(1,j)
+if (ia) then
+   LuaCommandName_dir = LuaCommandName:sub(1,ja)
 end
 
-package.path = LuaCommandName_dir .. "../tools/?.lua;" ..
-               LuaCommandName_dir .. "?.lua;"       ..
-               LuaCommandName_dir .. "?/init.lua;"  ..
-               package.path
+local sys_lua_path = "@sys_lua_path@"
+if (sys_lua_path:sub(1,1) == "@") then
+   sys_lua_path = package.path
+end
+local sys_lua_cpath = "@sys_lua_cpath@"
+if (sys_lua_cpath:sub(1,1) == "@") then
+   sys_lua_cpath = package.cpath
+end
+
+package.path  = LuaCommandName_dir .. "../tools/?.lua;"       ..
+                LuaCommandName_dir .. "../tools/?/init.lua;"  ..
+                LuaCommandName_dir .. "?.lua;"                ..
+                LuaCommandName_dir .. "?/init.lua;"           ..
+                sys_lua_path
+package.cpath = LuaCommandName_dir .. "../lib/?.so;"..
+                sys_lua_cpath
+
+_G._DEBUG            = false
+local posix          = require("posix")
 
 function cmdDir()
    return LuaCommandName_dir
@@ -61,16 +76,50 @@ function masterTbl()
    return master
 end
 
-BaseShell      = require("BaseShell")
+BaseShell            = require("BaseShell")
 
 local dbg            = require("Dbg"):dbg()
 local CmdLineOptions = require("CmdLineOptions")
 local BuildTarget    = require("BuildTarget")
 local STT            = require("STT")
+local cosmic         = require("Cosmic"):singleton()
+local getenv         = os.getenv
+
 require("ModifyPath")
 require("Output")
 require("serializeTbl")
 
+------------------------------------------------------------------------
+-- LMOD_LD_LIBRARY_PATH:   LD_LIBRARY_PATH found at configure
+------------------------------------------------------------------------
+
+local ld_lib_path = "@sys_ld_lib_path@"
+if (ld_lib_path:sub(1,1) == "@") then
+   ld_lib_path = getenv("LD_LIBRARY_PATH")
+end
+if (ld_lib_path == "") then
+   ld_lib_path = false
+end
+
+cosmic:init{name    = "LMOD_LD_LIBRARY_PATH",
+            default = false,
+            assignV = ld_lib_path}
+
+------------------------------------------------------------------------
+-- LMOD_LD_PRELOAD:   LD_PRELOAD found at configure
+------------------------------------------------------------------------
+
+local ld_preload = "@sys_ld_preload@"
+if (ld_preload:sub(1,1) == "@") then
+   ld_preload = getenv("LD_PRELOAD")
+end
+if (ld_preload == "") then
+   ld_preload = nil
+end
+
+cosmic:init{name    = "LMOD_LD_PRELOAD",
+            default = false,
+            assignV = ld_preload}
 
 function main()
    local masterTbl   = masterTbl()
@@ -112,6 +161,7 @@ function main()
    BuildTarget.exec(shell)
 
    if (masterTbl.report) then
+      io.stderr:write(serializeTbl{name="SettargConfigFnA",   indent=true, value=masterTbl.SttgConfFnA},"\n")
       io.stderr:write(serializeTbl{name="BuildScenarioTbl",   indent=true, value=masterTbl.BuildScenarioTbl},"\n")
       io.stderr:write(serializeTbl{name="HostnameTbl",        indent=true, value=masterTbl.HostTbl},         "\n")
       io.stderr:write(serializeTbl{name="ModuleTbl",          indent=true, value=masterTbl.ModuleTbl},       "\n")

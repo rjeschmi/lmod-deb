@@ -14,7 +14,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -43,23 +43,34 @@ local M={}
 
 local validT =
 {
-      ['load']       = false,  -- This load hook is called after a
-                               -- modulefile is loaded.
-      unload         = false,  -- This unload hook is called after a
-                               -- modulefile is unloaded.
-      parse_updateFn = false,  -- This hook returns the time on the
-                               -- timestamp file.
-      writeCache     = false,  -- This hook return whether a cache
-                               -- should be written.
-      SiteName       = false,  -- Hook to specify Site Name
-                               -- It is used to generate family
-                               -- prefix:  site_FAMILY_
-      msgHook        = false,  -- Hook to print messages after:
-                               -- avail, list, spider
-      groupName      = false,  -- This hook adds the arch and os name
-                               -- to moduleT.lua to make it safe on
-                               -- shared filesystems.
-      avail          = false,  -- Map directory names to labels
+      ['load']          = false, -- This load hook is called after a
+                                 -- modulefile is loaded.
+      unload            = false, -- This unload hook is called after a
+                                 -- modulefile is unloaded.
+      parse_updateFn    = false, -- This hook returns the time on the
+                                 -- timestamp file.
+      writeCache        = false, -- This hook return whether a cache
+                                 -- should be written.
+      SiteName          = false, -- Hook to specify Site Name
+                                 -- It is used to generate family
+                                 -- prefix:  site_FAMILY_
+      msgHook           = false, -- Hook to print messages after:
+                                 -- avail, list, spider,
+      errWarnMsgHook    = false, -- Hook to print messages after LmodError
+                                 -- LmodWarning, LmodMessage
+      groupName         = false, -- This hook adds the arch and os name
+                                 -- to moduleT.lua to make it safe on
+                                 -- shared filesystems.
+      avail             = false, -- Map directory names to labels
+      restore           = false, -- This hook is run after restore operation
+      startup           = false, -- This hook is run when Lmod is called
+      finalize          = false, -- This hook is run just before Lmod generates its output before exiting
+      packagebasename   = false, -- Hook to find the patterns that spider uses for reverse map
+      load_spider       = false, -- This hook is run evaluating modules for spider/avail
+      listHook          = false, -- This hook gets the list of active modules
+      isVisibleHook     = false, -- Called to evalate if a module should be hidden or not
+      spider_decoration = false, -- This hook adds decoration to spider level one output.
+                                 -- It can be the category or a property.
 }
 
 --------------------------------------------------------------------------
@@ -70,7 +81,7 @@ function M.register(name, func)
    if (validT[name] ~= nil) then
       validT[name] = func
    else
-      io.stderr:write("Unknown hook: ", tostring(name),"\n")
+      LmodWarning{msg="w_Unknown_Hook",name = tostring(name)}
    end
 
 end
@@ -83,6 +94,10 @@ function M.apply(name, ...)
    if (validT[name]) then
       return validT[name](...)
    end
+end
+
+function M.exists(name)
+   return validT[name] and true or false
 end
 
 return M

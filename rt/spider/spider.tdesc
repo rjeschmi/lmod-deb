@@ -1,0 +1,127 @@
+-- -*- lua -*-
+testdescript = {
+   owner   = "rtm",
+   product = "modules",
+   description = [[
+	 Test initial module load
+   ]],
+   keywords = {"load" },
+
+   active = 1,
+   testName = "spider",
+   job_submit_method = "INTERACTIVE",
+
+   runScript = [[
+
+     . $(projectDir)/rt/common_funcs.sh
+
+     unsetMT
+     initStdEnvVars
+     export MODULEPATH_ROOT=$(testDir)/mf
+     export TEST_MROOT=$(testDir)/mf
+     export MODULERCFILE=$testDir/modulerc
+
+     rm -f  _stderr.* _stdout.* err.* out.*
+     rm -fr .lmod.d .lmodrc.lua
+     cp $(projectDir)/init/lmodrc.lua .lmodrc.lua
+
+     runLmod --version                                                        # 1
+     runLmod use -a $testDir/mf/Core $testDir/mf/Beta $testDir/mf/Base $testDir/mf/Core2 # 2
+     runLmod spider                                                           # 3
+     runLmod -t spider                                                        # 4
+     runLmod spider mpich2                                                    # 5
+     runLmod spider mpich2/1.0.7                                              # 6
+
+     runLmod spider parmetis/3.1                                              # 7
+
+     runLmod spider mpich2me                                                  # 8
+     runLmod spider R                                                         # 9
+     runLmod -r spider '^R'                                                   #10
+     runLmod -r spider '^[Rr]'                                                #11
+     runLmod spider mpich2/1.0.5                                              #12
+     runLmod spider is-dyna                                                   #13
+     runLmod spider is-dyna/1.0                                               #14
+     runLmod spider bwa                                                       #15
+     runLmod spider gromacs                                                   #16
+     runLmod spider apps/gromacs                                              #17
+     runLmod spider apps/gromacs/4.6.3                                        #18
+     runLmod spider apps/gromacs/4.6.3-debug                                  #19
+
+     runLmod use $testDir/mf/UNKNOWN                                          #20
+
+     mkdir -p $HOME/.lmod.d/.cache
+     buildSpiderT $MODULEPATH > $HOME/.lmod.d/.cache/spiderT.lua
+     buildDbT $MODULEPATH > $HOME/.lmod.d/.cache/dbT.lua
+     runSpiderCmd -o spider-json $MODULEPATH > $HOME/.lmod.d/.cache/spider.json
+     runLmod spider                                                           #21
+     runLmod spider gromacs                                                   #22
+     runLmod spider apps/gromacs                                              #23
+     runLmod spider apps/gromacs/4.6.3                                        #24
+     runLmod spider apps/gromacs/4.6.3-debug                                  #25
+     runLmod spider petsc/3.1                                                 #26
+
+     runLmod use $testDir/mf/Core3                                            #27
+     runLmod spider smrt                                                      #28
+     runLmod spider petsc/3.1                                                 #29
+
+     mv $HOME/.lmod.d/.cache $HOME/.lmod.d/.old.cache 
+     unsetMT
+     export LMOD_CASE_INDEPENDENT_SORTING=yes
+     export LMOD_RC=$testDir/lmodrc.lua
+     export MROOT_CQ=$testDir/mf/CQ
+     export MODULEPATH=$testDir/mf/CQ/Core
+     runLmod spider                                                           #30
+
+     unsetMT
+     export MODULEPATH=$testDir/mf/D
+     runLmod spider GCC                                                       #31
+     runLmod spider gcc                                                       #32
+     
+     unsetMT
+     export MODULEPATH=$testDir/mf/E_Core
+     runBase runSpiderCmd -o spiderT  $MODULEPATH                             #33
+     runBase runSpiderCmd -o dbT      $MODULEPATH                             #34
+     runLmod spider python2/2.7                                               #35
+     runLmod -t spider                                                        #36
+     runLmod    spider                                                        #37
+     runLmod    spider numpy                                                  #38
+     runLmod    spider numpy/1.16.4                                           #39
+     runLmod    load   numpy                                                  #40
+     runLmod    load   numpy/1.16.4                                           #41
+     runLmod    avail                                                         #42
+
+     unsetMT
+     export MODULEPATH=$testDir/mf/F_Core
+     runLmod    spider abcpy                                                  #43
+     runLmod    spider abcpy/2.1                                              #44
+
+     unsetMT
+     export MODULEPATH=$testDir/mf/G_Core
+     runBase runSpiderCmd -o spiderT  $MODULEPATH                             #45
+
+
+     HOME=$ORIG_HOME
+
+     cat _stdout.[0-9][0-9][0-9] > _stdout.orig
+     joinBase64Results  -bash  _stdout.orig _stdout.new
+     cleanUp _stdout.new out.txt
+
+     cat _stderr.[0-9][0-9][0-9] > _stderr.orig
+     cleanUp _stderr.orig err.txt
+
+     rm -f results.csv
+     wrapperDiff --csv results.csv $(testDir)/out.txt out.txt
+     wrapperDiff --csv results.csv $(testDir)/err.txt err.txt
+     testFinish -r $(resultFn) -t $(runtimeFn) results.csv
+   ]],
+
+
+   blessScript = [[
+         # perform what is needed
+   ]],
+
+   tests = {
+      { id='t1'},
+   },
+
+}

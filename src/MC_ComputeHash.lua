@@ -28,7 +28,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -54,13 +54,13 @@ require("strict")
 
 require("utils")
 
+local MasterControl        = require("MasterControl")
 MC_ComputeHash             = inheritsFrom(MasterControl)
 MC_ComputeHash.my_name     = "MC_ComputeHash"
 MC_ComputeHash.my_sType    = "load"
 MC_ComputeHash.my_tcl_mode = "load"
 local M                    = MC_ComputeHash
 local dbg                  = require("Dbg"):dbg()
-local concatTbl            = table.concat
 local A                    = ShowResultsA
 
 local function ShowCmd(name, ...)
@@ -68,14 +68,23 @@ local function ShowCmd(name, ...)
 end
 
 M.add_property         = MasterControl.quiet
+M.color_banner         = MasterControl.quiet
+M.conflict             = MasterControl.quiet
+M.error                = MasterControl.quiet
 M.execute              = MasterControl.quiet
+M.extensions           = MasterControl.quiet
+M.family               = MasterControl.quiet
 M.help                 = MasterControl.quiet
 M.inherit              = MasterControl.quiet
+M.message              = MasterControl.quiet
+M.msg_raw              = MasterControl.quiet
 M.myFileName           = MasterControl.myFileName
 M.myModuleFullName     = MasterControl.myModuleFullName
-M.myModuleUsrName      = MasterControl.myModuleUsrName
 M.myModuleName         = MasterControl.myModuleName
+M.myModuleUsrName      = MasterControl.myModuleUsrName
 M.myModuleVersion      = MasterControl.myModuleVersion
+M.prereq               = MasterControl.quiet
+M.prereq_any           = MasterControl.quiet
 M.pushenv              = MasterControl.quiet
 M.remove_property      = MasterControl.quiet
 M.report               = MasterControl.quiet
@@ -87,12 +96,7 @@ M.unset_alias          = MasterControl.quiet
 M.unset_shell_function = MasterControl.quiet
 M.unsetenv             = MasterControl.quiet
 M.whatis               = MasterControl.quiet
-M.family               = MasterControl.quiet
-M.prereq               = MasterControl.quiet
-M.prereq_any           = MasterControl.quiet
-M.conflict             = MasterControl.quiet
-M.error                = MasterControl.quiet
-M.message              = MasterControl.quiet
+
 
 
 --------------------------------------------------------------------------
@@ -149,12 +153,34 @@ function M.load(self, mA)
    A[#A+1] = ShowCmdA("load", mA)
 end
 
+-- Print mgrload command.
+-- @param self A MasterControl object
+-- @param mA An array of module names (MName objects)
+function M.mgrload(self, required, active)
+   A[#A+1] = ShowCmd("mgrload", required, active)
+end
+--------------------------------------------------------------------------
+-- Print depends_on command.
+-- @param self A MasterControl object
+-- @param mA An array of module names (MName objects)
+function M.depends_on(self, mA)
+   A[#A+1] = ShowCmdA("depends_on", mA)
+end
+
 --------------------------------------------------------------------------
 -- Print load command.
 -- @param self A MasterControl object
 -- @param mA An array of module names (MName objects)
 function M.load_usr(self, mA)
    A[#A+1] = ShowCmdA("load", mA)
+end
+
+--------------------------------------------------------------------------
+-- Print load_any command.
+-- @param self A MasterControl object
+-- @param mA An array of module names (MName objects)
+function M.load_any(self, mA)
+   A[#A+1] = ShowCmdA("load_any", mA)
 end
 
 --------------------------------------------------------------------------

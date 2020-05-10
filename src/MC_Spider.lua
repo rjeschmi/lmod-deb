@@ -18,7 +18,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -48,23 +48,28 @@ require("utils")
 local dbg              = require("Dbg"):dbg()
 local concatTbl        = table.concat
 local hook             = require("Hook")
+local MasterControl    = require("MasterControl")
 MC_Spider              = inheritsFrom(MasterControl)
 MC_Spider.my_name      = "MC_Spider"
 MC_Spider.my_sType     = "load"
-MC_Spider.my_tcl_mode  = "load"
+MC_Spider.my_tcl_mode  = "display"
 
 local M                = MC_Spider
 
 M.always_load          = MasterControl.quiet
 M.always_unload        = MasterControl.quiet
 M.conflict             = MasterControl.quiet
+M.color_banner         = MasterControl.quiet
+M.depends_on           = MasterControl.quiet
 M.error                = MasterControl.quiet
 M.execute              = MasterControl.execute
-M.family               = MasterControl.quiet
 M.inherit              = MasterControl.quiet
 M.load                 = MasterControl.quiet
+M.load_any             = MasterControl.quiet
 M.load_usr             = MasterControl.quiet
 M.message              = MasterControl.quiet
+M.msg_raw              = MasterControl.quiet
+M.mgrload              = MasterControl.quiet
 M.prereq               = MasterControl.quiet
 M.prereq_any           = MasterControl.quiet
 M.pushenv              = MasterControl.quiet
@@ -81,12 +86,17 @@ M.unset_shell_function = MasterControl.quiet
 M.usrload              = MasterControl.quiet
 M.warning              = MasterControl.warning
 
+function argsPack(...)
+   local arg = { n = select("#", ...), ...}
+   return arg
+end
+pack     = (_VERSION == "Lua 5.1") and argsPack or table.pack
+
 --------------------------------------------------------------------------
 -- use the moduleStack to return the filename of the modulefile.
 -- @param self A MasterControl object.
 function M.myFileName(self)
-   local masterTbl   = masterTbl()
-   local moduleStack = masterTbl.moduleStack
+   local moduleStack = masterTbl().moduleStack
    local iStack      = #moduleStack
    return moduleStack[iStack].fn
 end
@@ -97,10 +107,9 @@ end
 -- the full name.
 -- @param self A MasterControl object.
 function M.myModuleFullName(self)
-   local masterTbl   = masterTbl()
-   local moduleStack = masterTbl.moduleStack
+   local moduleStack = masterTbl().moduleStack
    local iStack      = #moduleStack
-   return moduleStack[iStack].full
+   return moduleStack[iStack].fullName
 end
 
 M.myModuleUsrName = M.myModuleFullName
@@ -109,8 +118,7 @@ M.myModuleUsrName = M.myModuleFullName
 -- Use the moduleStack to return the short name of the module.
 -- @param self A MasterControl object.
 function M.myModuleName(self)
-   local masterTbl   = masterTbl()
-   local moduleStack = masterTbl.moduleStack
+   local moduleStack = masterTbl().moduleStack
    local iStack      = #moduleStack
    return moduleStack[iStack].sn
 end
@@ -120,25 +128,46 @@ end
 -- modules the version will be "".
 -- @param self A MasterControl object.
 function M.myModuleVersion(self)
-   local masterTbl   = masterTbl()
-   local moduleStack = masterTbl.moduleStack
+   local moduleStack = masterTbl().moduleStack
    local iStack      = #moduleStack
-   local full        = moduleStack[iStack].full
+   local fullName    = moduleStack[iStack].fullName
    local sn          = moduleStack[iStack].sn
-   return extractVersion(full, sn) or ""
+   return extractVersion(fullName, sn) or ""
 end
 
 --------------------------------------------------------------------------
--- MC_Spider:help(): Collect the help message into moduleT
+-- MC_Spider:help(...): Collect the help message into moduleT
 -- @param self A MasterControl object.
 function M.help(self,...)
    dbg.start{"MC_Spider:help(...)"}
-   local masterTbl    = masterTbl()
-   local moduleStack  = masterTbl.moduleStack
+   local moduleStack  = masterTbl().moduleStack
    local iStack       = #moduleStack
    local path         = moduleStack[iStack].path
    local moduleT      = moduleStack[iStack].moduleT
-   moduleT[path].help = concatTbl({...},"")
+   moduleT.help       = concatTbl({...},"")
+   dbg.fini()
+   return true
+end
+
+--------------------------------------------------------------------------
+-- MC_Spider:extensions(...): Copy the list of provides to moduleT
+-- @param self A MasterControl object.
+function M.extensions(self,...)
+   dbg.start{"MC_Spider:extensions(...)"}
+   local moduleStack  = masterTbl().moduleStack
+   local iStack       = #moduleStack
+   local path         = moduleStack[iStack].path
+   local moduleT      = moduleStack[iStack].moduleT
+
+   local argA = pack(...)
+   local a = {}
+   for i = 1, argA.n do
+      local b = argA[i]
+      for name in b:split(" *, *") do
+         a[#a+1] = name
+      end
+   end
+   moduleT.provides   = a
    dbg.fini()
    return true
 end
@@ -149,45 +178,60 @@ end
 -- @param s whatis string.
 function M.whatis(self,s)
    dbg.start{"MC_Spider:whatis(...)"}
-   local masterTbl   = masterTbl()
-   local moduleStack = masterTbl.moduleStack
+   local moduleStack = masterTbl().moduleStack
    local iStack      = #moduleStack
    local path        = moduleStack[iStack].path
    local moduleT     = moduleStack[iStack].moduleT
 
-   local i,j, key, value = s:find('^%s*([^: ]+)%s*:%s*(.*)')
+   local _,_, key, value = s:find('^%s*([^: ]+)%s*:%s*(.*)')
    local k  = KeyT[key]
    if (k) then
-      moduleT[path][key] = value
+      moduleT[key] = value
    end
-   if (moduleT[path].whatis == nil) then
-      moduleT[path].whatis ={}
+   if (moduleT.whatis == nil) then
+      moduleT.whatis ={}
    end
-   moduleT[path].whatis[#moduleT[path].whatis+1] = s
+   moduleT.whatis[#moduleT.whatis+1] = s
    dbg.fini()
    return true
 end
 
-s_pat = false
+s_patLib = false
+s_patDir = false
 --------------------------------------------------------------------------
--- Track "TACC_.*_LIB" environment variables or whatever the site is
--- called.
+-- Track "LMOD_.*_LIB" and LMOD_.*_DIR environment variables or whatever
+-- the site is called (See SitePackage.lua and StandardPackage.lua.)
 -- @param self A MasterControl object.
 -- @param name the environment variable name.
 -- @param value the environment variable value.
 function M.setenv(self, name, value)
    dbg.start{"MC_Spider:setenv(name, value)"}
 
-   if (not s_pat) then
-      local a = {}
-      a[#a+1] = "^"
-      a[#a+1] = hook.apply("SiteName")
-      a[#a+1] = "_.*_LIB"
-      s_pat   = concatTbl(a,"")
+   if (not s_patLib) then
+      local a  = {}
+      a[#a+1]  = "^"
+      a[#a+1]  = hook.apply("SiteName")
+      a[#a+1]  = "_.*_LIB"
+      s_patLib = concatTbl(a,"")
+      a        = {}
+      a[#a+1]  = "^"
+      a[#a+1]  = hook.apply("SiteName")
+      a[#a+1]  = "_.*_DIR"
+      s_patDir = concatTbl(a,"")
+
+      local t = {patDir = s_patDir, patLib = s_patLib}
+      hook.apply("packagebasename", t)
+      s_patDir = t.patDir
+      s_patLib = t.patLib
+
+      dbg.print{"Using s_patDir: ", s_patDir, " s_patLib: ", s_patLib, "\n"}
    end
 
-   if (name:find(s_pat)) then
+   if (name:find(s_patLib)) then
       processLPATH(value)
+   end
+   if (name:find(s_patDir)) then
+      processDIR(value)
    end
    dbg.fini()
    return true
@@ -217,10 +261,26 @@ function M.append_path(self,t)
 end
 
 --------------------------------------------------------------------------
--- Always return true.
+-- Return True when in spider mode.
 -- @param self A MasterControl object.
 function M.is_spider(self)
    dbg.start{"MC_Spider:is_spider()"}
+   dbg.fini()
+   return true
+end
+
+--------------------------------------------------------------------------
+-- Copy the family to moduleT
+-- @param self A MasterControl object.
+-- @param value the family value
+
+function M.family(self, value)
+   dbg.start{"MC_Spider:family(\"value=\"",value,"\")"}
+   local moduleStack   = masterTbl().moduleStack
+   local iStack        = #moduleStack
+   local path          = moduleStack[iStack].path
+   local moduleT       = moduleStack[iStack].moduleT
+   moduleT.family      = value
    dbg.fini()
    return true
 end
@@ -232,15 +292,14 @@ end
 -- @param value the value.
 function M.add_property(self, name, value)
    dbg.start{"MC_Spider:add_property(name=\"",name,"\", value=\"",value,"\")"}
-   local masterTbl     = masterTbl()
-   local moduleStack   = masterTbl.moduleStack
+   local moduleStack   = masterTbl().moduleStack
    local iStack        = #moduleStack
    local path          = moduleStack[iStack].path
    local moduleT       = moduleStack[iStack].moduleT
-   local t             = moduleT[path].propT or {}
+   local t             = moduleT.propT or {}
    t[name]             = t[name] or {}
    t[name][value]      = 1
-   moduleT[path].propT = t
+   moduleT.propT = t
    dbg.fini()
    return true
 end
@@ -252,15 +311,14 @@ end
 -- @param value the value.
 function M.remove_property(self, name, value)
    dbg.start{"MC_Spider:remove_property(name=\"",name,"\", value=\"",value,"\")"}
-   local masterTbl     = masterTbl()
-   local moduleStack   = masterTbl.moduleStack
+   local moduleStack   = masterTbl().moduleStack
    local iStack        = #moduleStack
    local path          = moduleStack[iStack].path
    local moduleT       = moduleStack[iStack].moduleT
-   local t             = moduleT[path].propT or {}
+   local t             = moduleT.propT or {}
    t[name]             = t[name] or {}
    t[name][value]      = nil
-   moduleT[path].propT = t
+   moduleT.propT = t
    dbg.fini()
    return true
 end

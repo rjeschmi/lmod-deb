@@ -8,7 +8,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -37,15 +37,15 @@
 
 
 require("strict")
-
-Bare	     = inheritsFrom(BaseShell)
-Bare.my_name = 'bare'
+local BaseShell = require("BaseShell")
+Bare	        = inheritsFrom(BaseShell)
+Bare.my_name    = 'bare'
 
 function Bare.expand(self,tbl)
    local a = {}
    for k in pairsByKeys(tbl) do
-      local v = tbl[k]:expand()
-      a[#a + 1] = k .. ": " .. "'" .. v .. "'"
+      local v = tostring(tbl[k]:expand()):multiEscaped()
+      a[#a + 1] = k .. ": " .. v
    end
    io.stderr:write(table.concat(a,"\n"),"\n")
 end

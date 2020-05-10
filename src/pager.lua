@@ -1,8 +1,12 @@
 --------------------------------------------------------------------------
--- Fixme
+-- This module controls the pager. There are two ways to use the pager.
+-- If stderr is connected to a term and it is configured for it, stderr
+-- will be run through the pager.  If not bypassPager is used which just
+-- writes all strings to the stream "f".
 -- @module pager
 
 require("strict")
+
 --------------------------------------------------------------------------
 -- Lmod License
 --------------------------------------------------------------------------
@@ -13,7 +17,7 @@ require("strict")
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2018 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -37,41 +41,40 @@ require("strict")
 --
 --------------------------------------------------------------------------
 
+require("myGlobals")
+require("haveTermSupport")
+
 local dbg       = require("Dbg"):dbg()
 local concatTbl = table.concat
+local cosmic    = require("Cosmic"):singleton()
 
 local function argsPack(...)
-   local  arg = { n = select ("#", ...), ...}
-   return arg
+   local  argA = { n = select("#", ...), ...}
+   return argA
 end
 
-local pack        = (_VERSION == "Lua 5.1") and argsPack or table.pack
-
---------------------------------------------------------------------------
--- Pager: This file provides two ways to use the pager.  If stderr is
---        connected to a term and it is configured for it, stderr will be
---        run through the pager.  If not bypassPager is used which just
---        writes all strings to the stream "f".
+local pack        = (_VERSION == "Lua 5.1") and argsPack or table.pack -- luacheck: compat
 
 s_pager = false
 
 
 --------------------------------------------------------------------------
--- bypassPager(): all input arguments to stream f
-
+-- All input arguments to stream f
+-- @param f A stream object.
 function bypassPager(f, ...)
-   local arg = pack(...)
-   for i = 1, arg.n do
-      f:write(arg[i])
+   local argA = pack(...)
+   for i = 1, argA.n do
+      f:write(argA[i])
    end
 end
 
 --------------------------------------------------------------------------
--- usePager(): Use pager to present input arguments to user via whatever
---             pager has been chosen.
-
+-- Use pager to present input arguments to user via whatever
+-- pager has been chosen.
+-- @param f A stream object.
 function usePager(f, ...)
    dbg.start{"usePager()"}
+   s_pager = "LESS="..cosmic:value("LMOD_PAGER_OPTS").." "..s_pager
    local p = io.popen(s_pager .. " 1>&2" ,"w")
    local s = concatTbl({...},"")
    p:write(s)
@@ -80,14 +83,20 @@ function usePager(f, ...)
 end
 
 --------------------------------------------------------------------------
--- buildPager(): Return usePager if PAGER exists otherwise,  return bypassPager
-
+-- Return usePager if PAGER exists otherwise,  return bypassPager
 function buildPager()
    local func  = bypassPager
-   local pager = LMOD_PAGER or os.getenv("PAGER") or Pager
-   s_pager     = findInPath(pager)
-   if (s_pager and s_pager ~= "") then
+   local pager = cosmic:value("LMOD_PAGER")
+   local found
+   s_pager, found = findInPath(pager)
+   if (found) then
       func     = usePager
    end
    return func
+end
+
+pager = bypassPager
+
+if (connected2Term()) then
+   pager = buildPager()
 end

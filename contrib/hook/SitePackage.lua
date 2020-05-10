@@ -8,7 +8,7 @@
 --
 --  ----------------------------------------------------------------------
 --
---  Copyright (C) 2008-2014 Robert McLay
+--  Copyright (C) 2008-2016 Robert McLay
 --
 --  Permission is hereby granted, free of charge, to any person obtaining
 --  a copy of this software and associated documentation files (the
@@ -33,6 +33,7 @@
 --------------------------------------------------------------------------
 
 require("strict")
+require("lmod_system_execute")
 local hook   = require("Hook")
 
 -- By using the hook.register function, this function "load_hook" is called
@@ -58,7 +59,7 @@ function load_hook(t)
    local jobid = os.getenv("PBS_JOBID") or "unknown"
    local msg   = string.format("user=%s,module=%s,fn=%s,job=%s",
                                user, t.modFullName, t.fn, jobid)
-   os.execute("logger -t lmod -p local0.info " .. msg)
+   lmod_system_execute("logger -t lmod -p local0.info " .. msg)
 end
 
 hook.register("load",load_hook)

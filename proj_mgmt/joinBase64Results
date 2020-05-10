@@ -1,0 +1,323 @@
+#!/usr/bin/env lua
+-- -*- lua -*-
+--------------------------------------------------------------------------
+-- Convert base64 encoded Strings into the module table.  This is used
+-- to generate test results.
+-- @script joinBase64Results
+
+--------------------------------------------------------------------------
+-- Lmod License
+--------------------------------------------------------------------------
+--
+--  Lmod is licensed under the terms of the MIT license reproduced below.
+--  This means that Lmod is free software and can be used for both academic
+--  and commercial purposes at absolutely no cost.
+--
+--  ----------------------------------------------------------------------
+--
+--  Copyright (C) 2008-2018 Robert McLay
+--
+--  Permission is hereby granted, free of charge, to any person obtaining
+--  a copy of this software and associated documentation files (the
+--  "Software"), to deal in the Software without restriction, including
+--  without limitation the rights to use, copy, modify, merge, publish,
+--  distribute, sublicense, and/or sell copies of the Software, and to
+--  permit persons to whom the Software is furnished to do so, subject
+--  to the following conditions:
+--
+--  The above copyright notice and this permission notice shall be
+--  included in all copies or substantial portions of the Software.
+--
+--  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+--  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+--  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+--  NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+--  BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+--  ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+--  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+--  THE SOFTWARE.
+--
+--------------------------------------------------------------------------
+
+
+local cmd = arg[0]
+
+local i,j = cmd:find(".*/")
+local cmd_dir = "./"
+if (i) then
+   cmd_dir = cmd:sub(1,j)
+end
+package.path = cmd_dir .. "../tools/?.lua;"      ..
+               cmd_dir .. "../tools/?/init.lua;" ..
+               cmd_dir .. "?.lua;"               ..
+               package.path
+
+_G._DEBUG   = false
+local posix = require("posix")
+
+require("strict")
+
+--------------------------------------------------------------------------
+-- This is 5.1 Lua function to cover the table.pack function
+-- that is in Lua 5.2 and later.
+
+function argsPack(...)
+   local arg = { n = select("#", ...), ...}
+   return arg
+end
+pack     = (_VERSION == "Lua 5.1") and argsPack or table.pack
+
+require("string_utils")
+require("serializeTbl")
+local s_name    = "_ModuleTable_"
+local base64    = require("base64")
+local cosmic    = require("Cosmic"):singleton()
+local concatTbl = table.concat
+local decode64  = base64.decode64
+local load      = (_VERSION == "Lua 5.1") and loadstring or load
+
+cosmic:init{name = "LMOD_LD_LIBRARY_PATH", default = false, assignV = false}
+cosmic:init{name = "LMOD_LD_PRELOAD",      default = false, assignV = false}
+
+
+local function grab(line, b)
+   local eqIdx = line:find("=")
+   local scIdx = line:find(";")
+   b[#b+1]     = line:sub(eqIdx+1,scIdx-1):gsub("\"","")
+end
+
+local function grabCsh(line,b)
+   local a = {}
+   for v in line:split(' ') do
+      a[#a + 1] = v
+   end
+   b[#b+1] = a[3]:gsub(";","")
+end   
+
+local function grabFish(line,b)
+   local a = {}
+   for v in line:split(' ') do
+      a[#a + 1] = v
+   end
+   b[#b+1] = a[5]:gsub(";","")
+end   
+
+
+_ModuleTable_ = false
+function removeUnwantedFields(s)
+   if (s == nil) then return "" end
+   local func, msg = load(s)
+   if (func) then
+      func()
+   else
+      io.stderr:write("Found syntax error: ",msg,"\n")
+      io.stderr:write(s,"\n")
+      return ""
+   end
+
+   local mt = _G._ModuleTable_ 
+
+   for k,v in pairs(mt) do
+      if (k:sub(1,2) == "c_") then
+         mt[k] = nil
+      end
+   end
+   local s = serializeTbl{ indent=false, name=s_name, value=mt}
+   return s:gsub("[ \n]","")
+end
+
+function sectionEnd(sType,A, a1, a2, a3)
+   local b = {}
+   if (#a2 > 0) then
+      if (sType == "bash") then
+         b[1] = s_name .."='" .. removeUnwantedFields(decode64(table.concat(a2,""))) .. "';"
+         b[2] = "export ".. s_name ..";"
+      elseif (sType == "csh") then
+         b[1] = "setenv " .. s_name .. " '" .. removeUnwantedFields(decode64(table.concat(a2,""))) .. "';"
+      elseif (sType == "fish") then
+         b[1] = "set -x -g " .. s_name .. " '" .. removeUnwantedFields(decode64(table.concat(a2,""))) .. "';"
+      end
+   end
+   joinArrays(A, a1, b, a3)
+   a1 = {}
+   a2 = {}
+   a3 = {}
+   return a1, a2, a3
+end
+
+function joinArrays(A,...)
+   local argA = pack(...)
+   for i = 1, argA.n do
+      local b = argA[i]
+      for j = 1, #b do
+         A[#A + 1] = b[j]
+      end
+   end
+end
+
+function joinMT_fish(whole)
+   local n2 = "_ModuleTable"
+   local A  = {}
+   local a1 = {}
+   local a2 = {}
+   local a3 = {}
+   local a  = a1
+   local state = "init"
+   for s in whole:split("\n") do
+      if (s:find("^set %-x %-g ".. n2 .. "%d%d%d_")) then
+         if (state == "init") then
+            state = "mt"
+         end
+         a = a3
+         grabFish(s, a2)
+      elseif (state == "init") then
+         local i,j, name, str = s:find("^(set -x -g __LMOD_STACK[^ ]*)%s+\"(.*)\"")
+         if (not i) then
+            a[#a + 1] = s
+         else
+            local b = {}
+            b[#b+1] = name
+            b[#b+1] = " \""
+            for v in str:split(":") do
+               v = (v ~= "false") and decode64(v) or "false"
+               b[#b+1] = v
+               b[#b+1] = ":"
+            end
+            b[#b]   = "\";"
+            a[#a+1] = concatTbl(b,"")
+         end
+      else
+         a1, a2, a3 = sectionEnd("fish", A,a1,a2,a3)
+         state   = "init"
+         a       = a1
+         a[#a+1] = s
+      end
+   end
+   sectionEnd("fish",A,a1,a2,a3)
+   return A
+end
+
+function joinMT_bash(whole)
+   local A  = {}
+   local a1 = {}
+   local a2 = {}
+   local a3 = {}
+   local a  = a1
+   local haveMT = false
+   local n2 = "_ModuleTable"
+
+   for s in whole:split("\n") do
+      local state = "init"
+      if (s:find("^" .. n2 .."%d%d%d_=")) then
+         if (state == "init") then
+            state = "mt"
+         end
+         a = a3
+         grab(s, a2)
+         haveMT = true
+      elseif (s:find("^export " .. n2 ) or
+              s:find("^unset "  .. n2 ) or
+              s:find("^" .. n2 .. "Sz")) then
+         state = "ignore"
+      elseif (haveMT and s:find("^===========================")) then
+         a1, a2, a3 = sectionEnd("bash", A, a1, a2, a3)
+         state   = "init"
+         a       = a1
+         haveMT  = false
+      end
+      if (state == "init") then
+         local i,j, name, str = s:find("^(__LMOD_STACK[^=]*)=([^;]*);")
+         if (not i) then
+            a[#a + 1] = s
+         else
+            local b = {}
+            b[#b+1] = name
+            b[#b+1] = "="
+            for v in str:split(":") do
+               v = (v ~= "false") and decode64(v) or "false"
+               b[#b+1] = v
+               b[#b+1] = ":"
+            end
+            b[#b] = ";"
+            a[#a+1] = concatTbl(b,"")
+         end
+      end
+   end
+   sectionEnd("bash", A, a1, a2, a3)
+   return A
+end
+
+function joinMT_csh(whole)
+   local n2 = "_ModuleTable"
+   local A  = {}
+   local a1 = {}
+   local a2 = {}
+   local a3 = {}
+   local a  = a1
+   local state = "init"
+   for s in whole:split("\n") do
+      if (s:find("^setenv ".. n2 .. "%d%d%d_")) then
+         if (state == "init") then
+            state = "mt"
+         end
+         a = a3
+         grabCsh(s, a2)
+      elseif (state == "init") then
+         local i,j, name, str = s:find("^(setenv __LMOD_STACK[^ ]*)%s+\"(.*)\"")
+         if (not i) then
+            a[#a + 1] = s
+         else
+            local b = {}
+            b[#b+1] = name
+            b[#b+1] = " \""
+            for v in str:split(":") do
+               v = (v ~= "false") and decode64(v) or "false"
+               b[#b+1] = v
+               b[#b+1] = ":"
+            end
+            b[#b]   = "\";"
+            a[#a+1] = concatTbl(b,"")
+         end
+      else
+         a1, a2, a3 = sectionEnd("csh", A,a1,a2,a3)
+         state   = "init"
+         a       = a1
+         a[#a+1] = s
+      end
+   end
+   sectionEnd("csh",A,a1,a2,a3)
+   return A
+end
+
+function main()
+   local resultA
+   local joinMT = joinMT_csh
+   if ( arg[1]:sub(1,1) == "-") then
+      if (arg[1] == "-bash") then
+         joinMT = joinMT_bash
+      end
+      if (arg[1] == "-fish") then
+         joinMT = joinMT_fish
+      end
+      table.remove(arg,1)
+   end
+
+   local fn = arg[1]
+   local f = io.open(fn)
+   if (f) then
+      local whole = f:read("*all")
+      f:close()
+      resultA = joinMT(whole)
+      fn = arg[2]
+      f = io.open(fn,"w")
+      for _,v in ipairs(resultA) do
+         if (v:len() > 0) then
+            f:write(v,"\n")
+         end
+      end
+      f:close()
+   end
+
+end
+
+main()

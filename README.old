@@ -1,3 +1,829 @@
+Lmod 8.2+
+   (8.2.1)  * Reset contrib/tracking_module_usage/createDB.py back to the version found in 6.0.25
+   (8.2.2)  * Use 'hostname -f' when 'uname -n' does not return a fully qualified hostname.
+              (used in contrib/TACC/SitePackage.lua) 
+   (8.2.3)  * Repaired the 8.2.1 version contrib/tracking_module_usage/createDB.py to now work.
+   (8.2.4)  * Diagnostic messages should go to stderr.
+            * issue #424: Make "ml - foo" and "module load - foo" report an error.
+   (8.2.5)  * issue #426: Change depends_on() to use validateModules() instead of
+              validateStringArgs() to validate the arguments from the user
+   (8.2.6)  * issue #426: Make the between() function set userName to the fullName when found.
+   (8.2.7)  * issue #428: Changed extensions() function to take comma separated strings
+            * issue #429: Corrected rt/between/err.txt file
+	    * issue #430: Change extensions msgs to be multi-line
+   (8.2.8)  * issue #428: Make extension() function only work with ',' only, not both comma or colon.
+   (8.2.9)  * issue #426: Make between() accept a modulefile in the range but not the "best" one.
+   (8.2.10) * Add support for "atleast()" and "between()" functions support a "<" to signify a 
+              less than instead of less than or equal to between range.
+   (8.2.11) * It is now safe to have os.exit(1) in a modulefile. Spider can now handle it.
+
+Lmod 8.1+
+   (8.1.1)  * Issue #392: include family info in spiderT and all other products based on spiderT like
+              dbT and the software page.
+   (8.1.2)  * Issue #382: Adding a spider_decoration hook so that sites can modify the output of spider
+              level 1 output.
+   (8.1.3)  * Issue #402: Add a shell-dependent Shell:report_failure() instead of always emitting "false".
+   (8.1.4)  * The R, perl, python, cmake report_failure() function ml status is false
+            * Issue #409: Added fish tab completion support (Thanks Alberto!)
+   (8.1.5)  * Issue #410: More fixes for the fish shell
+   (8.1.6)  * Issue #412: More fixes for the fish shell
+   (8.1.7)  * Issue #413: Support escape in things like PS1 for bash
+   (8.1.8)  * Issue #401: Use LMOD_PKG to determine where the lmod/etc directory is.
+   (8.1.9)  * Issue #401: Create and use LMOD_ROOT to be the parent lmod directory is located.
+   (8.1.10) * Add colorize() and color_banner() to sandbox for better message to users.
+   (8.1.11) * Allow init/env_modules_python.py.in to take a string or an array. 
+            * Change the way that Lmod determines the command.  Misspellings now fail.
+	    * Add finalize hook to match startup hook.
+	    * improved help message for disable.
+   (8.1.12) * Issue #417: move the abspath test from building spiderT and dbT to just
+              building reverseMapT
+   (8.1.13) * get the tag right for issue #417
+   (8.1.14) * Added test for building reverseMap with path directories which are symlinks
+            * Added new command "clearLmod" which does a module purge and removes all
+	      Lmod aliases and env. vars.
+   (8.1.15) * When building the spiderT tree, it now ignores "." in path.
+   (8.1.16) * Previous version failed to be uploaded to the world.  Bump version to fix.
+   (8.1.17) * Adding back "module switch" as an alias for "module swap"
+   (8.1.18) * Make --quiet work with module purge
+   (8.1.19) * Get settarg's getUname function handle linux that is not intel like ibm power 9
+            * Change directory search to require "rx" instead of just "x".
+            * Get tcl2lua.tcl to support the new extensions() function.
+
+Lmod 8.0+
+   (8.0.1)  * Change to use AC_SEARCH_LIBS for tcl, tcl8.8, tcl8.7, tcl8.6  tcl8.5 to accomodate SUSE's decision
+              not to include libtcl.so to point to the current tcl implementation.
+            * issue #401: change tcl2lua.c to copy output string into an internal buffer. This avoids problems 
+              found with some tcl interpreter (8.5.13 and earlier.
+            * Issue with tcl2lua.tcl not handling modulefiles writing to stderr.  All output from the tcl modulefiles
+              now go through $g_outputA.
+   (8.0.2)  * All hidden files are NOT written to the softwarePage output.
+            * Now automatically update docs/source/conf.py to the current version
+            * Created proj_mgmt directory to store programs that needed to manage the project but are not installed.
+            * TCL modulefiles writing to stderr (except for help msgs) now use LmodMsgRaw() and support puts -nonewline
+	    * The LmodMessage() function when given a single line that fits on the terminal do not "Fill".
+   (8.0.3)  * The integrated TCL interpreter will now return the error messages from a broken TCL modulefile/rc file.
+   (8.0.4)  * Fix problem with end2end and the myinfo/1.0 module where it printed out things like the hostname.
+   (8.0.5)  * small fix in the dist target.  Releasing on S2.
+   (8.0.6)  * Support for R to use tcl modulefiles.
+   (8.0.7)  * Support for extended default
+   (8.0.8)  * Allow sites to disable extended default
+   (8.0.9)  * A meta module as priority over a regular module if it occurs in an earlier directory in $MODULEPATH
+            * Added Lmod logo to README.md (Thanks Ward!)
+
+Lmod 7.8+
+   (7.8.1)  Change unload() to unload in both load and unload modes.  Updated documentation.
+            remove_path() remove path entries during unload.
+   (7.8.2)  issue #379: Extra space required for shell function definitions under bash
+            issue #380: Change DependencyCk mode from load to dependencyCk,
+	    sType and tcl_mode remain load.
+   (7.8.3)  Fixed problem with unbound variable __lmod_sh_dbg in module shell function definition
+   (7.8.4)  Add unload state to tracing.
+   (7.8.5)  Define MCP and mcp earlier in lmod main() so that errors/warning found in SitePackage work.
+            issue #383: Use LUA_PATH to evaluate Version.lua instead of depending on ./?.lua to be LUA_PATH.
+	    Added mgrload function and documentation
+   (7.8.6)  Fixed unbound variable in bash.in.
+   (7.8.7)  Fixed bug when ~/.lmod.d/cache was read only.
+   (7.8.8)  Fixed quote rules for Python, R and CMAKE.
+   (7.8.9)  issue #390: Added a message when find first rules are used to set defaults when NVV is found in both avail and tracing.
+            issue #389: Honor newlines and leading spaces in Nag messages.
+   (7.8.10) Allow MODULERCFILE to be a colon separated list.
+            issue #391: Only process the family stack when in the modulefile that requested it.
+   (7.8.11) Allow MODULERCFILE to be a colon separated list with the priority be left to right instead of right to left.
+   (7.8.12) added cc test case for issues with choosing the correct module when doing reloadAll()
+   (7.8.13) issue #394: Only reload modules when the userName has remained the same in mt.
+   (7.8.14) Add Lmod version report to --trace output.
+   (7.8.15) issue #394: use mname = MName:new("load",mt:userName(sn)) to get loadable file
+            contrib/tracking_module_usage python scripts have been updated to support python2 and python3
+   (7.8.16) Fix bug where spider reported incorrect results when a site mixed NV and NVV together in a single module.
+   (7.8.17) issue #395 fix infinite loop when Lmod is trying to do "module avail" on a Tmod 3.2.10 module true that includes "module"
+   (7.8.18) issue #396 Add support for $LMOD_DIR/../../etc/rc.lua
+   (7.8.19) issue #397 "module purge foo" shouldn't be the same as "module --force purge"
+   (7.8.20) issue #398 depends_on("non_existent") should produce a user error not an Lmod error.
+   (7.8.21) Wait to process LMOD_RC as late as possible.
+   (7.8.22) Make sure that absolute paths are given to the spider command.
+            Change "Loading:" to "Spider Loading:" when loading modules in Spider:findModules()
+	    issue #399 use Python Subprocess instead of os.popen(), Support LMOD_REDIRECT for python output
+            When generating spider products, spiderT, dbT, softwarePage, etc.  include help from TCL modulefiles
+   (7.8.90) Testing the new 8.0 with the tcl2lua.c code
+
+Lmod 7.7+
+   (7.7.1)  Fixed typo in myGlobals.lua about assigning LMOD_DUPLICATE_PATHS
+            Fixed TARG_TITLE_BAR_PAREN to always have a value, needed for tcsh.
+	    Added LMOD_SETTARG_TITLE_BAR=yes to turn on the title bar.
+            Changed from sn-version to sn/version in title bar.
+   (7.7.2)  Changed the initialization of LMOD_SETTARG_CMD in bash.in and csh.in.
+            It is defined to be `:' iff it is undefined.  This allows settarg to work
+	    in sub-shells.
+   (7.7.3)  Use spider cache for "module --terse avail" when LMOD_CACHED_LOADS=yes
+   (7.7.4)  Fix bug with LMOD_SETTARG_CMD and csh.
+   (7.7.5)  Turn off LMOD_REDIRECT for tcsh
+   (7.7.6)  Settarg now supports C/N/V and N/V/V module layouts.
+   (7.7.7)  Fixed a bug where sometimes a compiler-mpi dependent module wouldn't
+            be found when it should.
+	    Fixed issue #321 Changed LMOD_TARGPATHLOC to LMOD_SETTARG_TARG_PATH_LOCATION
+	    changed LMOD_FULL_SETTARG_SUPPORT to LMOD_SETTARG_FULL_SUPPORT. (Lmod supports both)
+	    Fixed issue #322 where non-existant directory would cause problems
+   (7.7.8)  Fix bug in settarg module for csh.
+   (7.7.9)  Fix bug in Csh.lua where semicolons inside an alias were removed.  Only remove the
+            trailing semicolon.
+   (7.7.10) Generate an LmodError() if the cachefile is broken.
+            Do not convert /foo/bar/../baz to /foo/baz.  Leave .. in paths. Fixes issue #324
+   (7.7.11) The admin.list (aka, nag mesages) supports Lua regex's.  Responds to issue #326
+   (7.7.12) The admin.list now supports multiple targets for the same message (issue #326)
+   (7.7.13) Use full path_regularize() on all TCL program files.  Having paths like /a/b/../d
+            caused problems for some users when interacting with TCL.
+   (7.7.14) Do not look for lua_json.  Just use the one that comes with Lmod.
+            Fix sh_to_modulefile correctly handle bad options (issue #332)
+            Allow pushenv("FOO",false) to clear "FOO" (issue #331)
+   (7.7.15) Always use ref counting for MODULEPATH.
+            Change the C-shell output to not use quotes and instead use back slashes to
+            quote special characters like $.
+	    Better filtering for c-shell output testing
+	    Fix bug in sh_to_modulefile
+	    Remove definition of SHOST from bash.in.  Recompute it in settarg module.
+            Support relative symlink when trying to find cmd_dir
+            Now get modify time correctly from SpiderCache timestamp file.
+   (7.7.16) Issue #346: do not use "ls" to get the list of directories when dealing with .modulepath
+            Issue #347: Just skip parsing "whole" if it is not a string (settarg)
+	    Issue #348: Do not double the colon when the original was a single colon
+   (7.7.18) Change ml so that ml av --terse is an error.
+   (7.7.19) Making the settarg and lmod modulefiles be installed versionless.
+   (7.7.20) Issue #353: Fix bug in cshrc.in end -> endif
+   (7.7.21) Issue #352: Allow sites to control the prefix completely.
+   (7.7.22) luaposix 34.0.4-1 wants to use setfenv() which only exists in Lua 5.1 and not in Lua 5.2+
+            so Lmod now requires("posix") outside of strict.
+            Build lua-term in the correct location when --with-siteControlPrefix=yes
+   (7.7.23) issue #347: Remove ./?.lua, ./?/init.lua from LUA_PATH and ./?.so from LUA_CPATH
+   (7.7.24) issue #357: Add missing semicolons in settarg.version.lua
+            Fixed bug with lib directories not being readable.
+   (7.7.25) issue #355: Make LMOD_RC support a colon separated list of possible lmodrc.lua files
+            Make bash, zsh and csh form LMOD_PKG to use <prefix>/lmod/lmod instead of
+	    <prefix>/lmod/<lmod_version> when allowing sites to completely control prefix (issue #352)
+	    issue #359: Lmod can now use the internal version of lfs for installation.
+   (7.7.26) issue #361: Support make -j install added.
+   (7.7.27) issue #362: Trying to fix problem with RPM builds of Lmod at UGENT.
+   (7.7.28) issue #358: Improved error msg when there is a syntax error in a modulefile.
+   (7.7.29) issue #365, #366: Fix typo in Makefile about pkgs.
+            Modify end2end test to use build-in lua pkgs only.
+   (7.7.30) issue #370: Allow for exact match with fn and fullName w/o regex pattern matching
+            added % quoting for '-' in docs.
+   (7.7.31) Support for making lmod silence shell debug output (when doing set -xv for bash or zsh)
+            The command "make world_update" now marks the latest release as the latest release at
+	    github.com/TACC/Lmod
+   (7.7.32) The new module command now returns the status from the eval of the lmod command
+   (7.7.33) Block .version.version and .modulerc.version files from being included in DirTree
+            Bash like shells now output without double quotes.
+   (7.7.34) Fix fish shell output for path and infopath. Fix shell function output for zsh/bash
+   (7.7.35) issue #374: convert ~ to $HOME internally.  This allows C-shell users to use ~
+            inside a modulefile and have it work when unloading.
+            issue #375: Support for is-loaded and is-avail added.
+   (7.7.36) Do not convert LMOD_PKG from /opt/apps/lmod/7.7.35 to /opt/apps/lmod/lmod if the link exists.
+   (7.7.37) When building reverseMap also take abspath(path) and store it if different.
+            Now make startup scripts (profile.in, cshrc.in, profile.fish.in) use PKGV instead of PKG so
+	    that the pre-install create $VERSION files. The install target will convert them to PKG.
+   (7.7.38) Check for "g" tools like gbasename, gexpr as well as the regular basename, expr etc.
+            General support for the modulerc files to be written in lua. They have a .lua extension.
+   (7.7.39) Bug fix for 7.7.38 where it did not work for Lua 5.1
+
+### Lmod 6.6:
+
+Features:
+
+  1. Now uses the value of LD_PRELOAD and LD_LIBRARY_PATH found at configure time to run all TCL progams.
+
+  2. Now uses a custom _module_dir function for tab completion in bash for module use path<TAB>. Thanks to Pieter Neerincx!
+
+  3. Support for LMOD_FAMILY_<name>_VERSION added.
+
+  4. If ~/.lmod.d/.cache/invalidated exists then the user cache file(s) are ignored. When generating a user cache file ~/.lmod.d/.cache/invalidated is deleted.
+
+Bug Fixes:
+
+  1. Correctly merges spider cache location where there are multiple lmodrc.lua files.
+
+  2. Remove leading and trailing blanks for names in setenv, pushenv, prepend_path, etc.
+
+  3. ml now generates error for unknown argument that start with a double minus. (e.g. ml --vers)
+
+  4. pushenv("name","") fixed when unloading module.
+
+  5. Make sure to regularize MODULEPATH when ingesting it for the first time.
+
+### Lmod 6.5:
+
+Features:
+
+  1. All the Lmod programs now resolve any symlinks to the actual program before adding to the Lua's package.path and package.cpath.
+
+  2. Contrib patch: Extend msgHook to LmodError and LmodWarning.
+
+  3. Now using travis for CI and testing.
+
+  4. Configure time option to have Lmod check for magic TCL string in modulefiles (#%Module)
+
+Bug Fixes:
+
+  1. The command "savelist" now only reports collections that match $LMOD_SYSTEM_NAME (install of all collections).
+
+  2. A collection name now CANNOT have `.' in its name.
+
+  3. Contrib patch: Get correct status in a capture in Lua 5.1.
+
+  4. Contrib patch: Failback to /proc/sys/kernel/random/uuid if uuidgen isn't available.
+
+  5. Contrib patch: Failback to shasum if sha1sum isn't available.
+
+  6. Now uses the tclsh (and the LD_LIBRARY_PATH) found at configure time.
+
+  7. Now searches for ps, basename, expr in /bin and /usr/bin when not using the locations found by configure
+
+### Lmod 6.4:
+
+Features:
+
+   1. Lmod now uses a regular expression to match user commands to internal commands. For example "av", "ava" or "available" will match "avail".
+
+Bug Fixes:
+
+   1. Lmod now obeys LMOD_REDIRECT (or module --redirect) when using the --terse option.  This means that if LMOD_REDIRECT is set then module -t av will go to stdout instead of stderr.
+
+   2. Lmod now does not resolve any symlinks when doing "module use <path>"
+
+   3. LMOD_REDIRECT is now reported with --config option.
+
+   4. Lmod would sometimes miss a symlink to a directory with module use.  This is now fixed.
+
+   5. Lmod now correctly ignores a valid .version/.modulerc file that points to a non-existant modulefile.
+
+   6. Allow the use of md5 -r as an alternative to sha1sum and md5sum
+
+   7. Added uninstall target to Lmod.
+
+
+### Lmod 6.3:
+
+Bug Fixes:
+
+   1. Lmod now uses the values of LUA_PATH and LUA_CPATH at configuration time.  This way Lmod is safe from user changes to these important Lua values.
+
+### Lmod 6.2:
+
+Bug Fixes:
+
+   1. Updated documentation at lmod.readthedocs.org
+
+   2. Support for generating xalt_rmapT.json used by XALT.
+
+   3. Fixed bug with upcase characters in version file.
+
+### Lmod 6.1:
+
+Features:
+
+   1. It is now possible to configure Lmod to use the spider cache when loading (`--with-cachedLoads=yes` or `export LMOD_CACHED_LOADS=1` to activate). This is off by default. Sites that use this will have to keep their spider caches up-to-date or user will not be able to load modules not in the cache.
+
+   2. It is now possible to configure Lmod to use Legacy Version ordering (`--with-legacyOrdering=yes` or `export LMOD_LEGACY_VERSION_ORDERING=1`). With legacy ordering 9.0 is "newer" than 10.0. This is the ordering that Tmod uses.
+
+   3. Lmod will print admin message (a.k.a nag messages) when doing module whatis <foo> or module help <foo>.  In other words if a nag message would appear with module load <foo> then it will also appear when using whatis or help.
+
+   4. Many improvement in the generation of the lmod database for module tracking.
+
+Bug Fixes:
+
+   1. The command module spider would fail to find a module if a site had the spider cache file dbT.lua files and a user had personal modulefiles. This is now fixed.
+
+   2. Two or more .version files could confused Lmod.  This is now fixed.
+
+   3. Lmod can now find UPPER CASE string when doing "module key ..."
+
+   4. Lmod now ignore the value of PAGER, instead it uses LMOD_PAGER (default "less") and LMOD_PAGER_OPTS (default "-XqRMEF").  This allows for consistent behavior under systems like the Cray and Mac OS X.
+
+   5. Lmod now reports the module stack when loads fail.
+
+   6. Set $LMOD_REVERSEMAPT_DIR after $LMOD_CACHE_DIR in update_lmod_system_cache_files.
+
+   7. Support for exit 1 in tcl modulefiles.
+
+   8. Fixed bug in tcl and unsetenv.
+
+### Lmod 6.0.1:
+
+Bug Fixes:
+
+   1. This version now contains the contrib/tracking_module_usage directory.
+
+   2. This version fixes a bug when trying to run module avail or module spider with an old cache file.
+
+
+### Lmod Version 6.0
+
+Features:
+
+   1. Full support for global RC files as well as .modulerc files. This means that $MODULERCFILE will be read along with ~/.modulerc. Also .modulerc files are read when they appear in the same directory and the version files (i.e. the same directory as 1.2 or 2.1.lua). One caveat, Setting the default module version in $MODULERCFILE or ~/.modulerc is not supported due Spider cache issues.
+
+   2. Instructions on how to save module usage data to a MySQL database along with scripts to analyze the usage are in contrib/tracking_module_usage/README.
+
+   3. Adding an exit hook.  This makes for more accurate tracking of module usage. See README above as to why this is a good idea.
+
+   4. Some minor speed-ups and minimizing of directory tree
+
+Lmod Version 5.9.3
+Features:
+   a) Lmod has been ported to Lua 5.3.
+   b) Thanks to Kenneth Hoste, a parameterized script, called
+      update_lmod_system_cache_files, to build system spider caches
+      has been added as part of Lmod. There is no need to modify
+      createSystemCacheFile.sh (in contrib/BuildSystemCacheFile)
+      to suit your site.
+   c) Sites and users now have a choice about restores from a
+      saved collection. Normally Lmod will follow defaults when
+      restoring.  That is if you saved a collection with a default
+      module, Lmod will load the default upon restore, even if the
+      default module has changed.  By configuring Lmod, you can
+      keep the same versions.  Users can control this by setting
+      LMOD_PIN_VERSIONS to true, or --pin_versions.
+
+Lmod Version 5.9.1
+Bug fixes
+   a) The spider cache is now ignored on unloads, show as well as
+      loads.
+   b) Lmod treats symlink directories and files much more quickly.
+      It also means that Lmod DOES NOT resolve two symlink
+      directories pointing to the same place.  It is too expensive
+      to resolve that on parallel file systems.
+   c) Initialization with Csh now works even when $TERM is not
+      set.
+Features:
+   a) Bash and Zsh tab-completion now support module restore <tab>
+      with the savelist.
+   b) The standard setup sets LMOD_VERSION as part of the startup
+      procedure.
+
+Lmod Version 5.9
+Feature:
+   a) Several changes to support faster avail with the spider cache.
+      This change requires updating the way the system spider cache
+      is built.  See contrib/BuildSystemCacheFile/README.txt.  On an
+      ssd laptop "ml av" is twice as fast.  On two different HPC system
+      I have seen 4 times speed improvement.
+
+Bug Fixes:
+   a) Fixed a bug where LUA_INCLUDE was not set.
+
+Lmod Version 5.8.6
+Bug Fixes:
+   a) Fixed a bug several modulefiles where marked as default
+   b) Two different fixes which will improve the speed of
+      reading the the cache file.
+   c) Configure will now abort if either tclsh or lua.h is
+      required but not available.
+
+Lmod Version 5.8.5
+Features/Bug fixes:
+   a) Fixed bug where the system spider cache was ignored.  This bug
+      was introduced in 5.8.  It is fixed now.
+   b) Support for disabling same name autoswapping added.  This is
+      not active by default.
+   c) Removed extra newlines when doing module list.
+   d) Correctly handle symlink directories with MODULEPATH.
+   e) Improved Spider support where module names have "-"
+   f) Fixed problem where lmodrc.lua was left out in tar ball.
+   g) Fixed problem where src/ignore_dirs_converter was left out
+      in tar ball.
+
+Lmod Version 5.8
+Features/Bug fixes:
+   a) Lmod support auto swapping instead of producing an error.
+   b) The init/bash.in and init/cshrc add a trailing colon to
+      MANPATH if it is empty
+   c) Fixes bug in ml tab completion for zsh.
+   d) setenv, prepend_path, etc now trim any leading or trailing
+      blanks around name: prepend_path(" MANPATH ","/opt/apps/...")
+      is now the same as prepend_path("MANPATH","/opt/apps/...")
+   e) The module command (and not ml) support combining of single
+      letter options.  "module -dw=60 avail" is the same as
+      "module -d -w=60 avail".
+   f) If a module collection file gets corrupted, Lmod now reports
+      that the collection file is corrupted and tells the user to
+      remove it.
+   g) Lmod now support "module swap <name>" which is exactly the
+      same as "module load <name>".  The module <name> is unloaded
+      and then reloaded.
+   h) Sites can configure for exporting the module shell function
+      in bash or not.
+
+
+Lmod Version 5.7.5:
+Features/Bug fixes:
+   a) "module use" and "ml use" now will work with tab completion
+      under bash. (It worked before for zsh).
+   b) New option, --spider_timeout sec is added.  Reason: When
+      Lmod can not load a module, it does a module spider to
+      see if the module exists but isn't loadable.  Now Lmod
+      doesn't do the spider when in LMOD_EXPERT mode.  It also
+      times out after 2 seconds.  If Lmod can't tell you quickly
+      if a module exists, why do it.
+   c) New configuration option --with-ignoreDirs.  By default
+      Lmod will ignore directories named .svn, .git, .hg and .bzr
+      in the Module directories. If you use CVS, RCS or SCCS to
+      source control your modulefiles, you will need configure
+      Lmod to know about those directories.
+   d) New avail hook added.  You can regroup the output of avail.
+      The avail hook gets a table of current directories that avail
+      will list.  Your routine can relabel them.  The input looks
+      like this:
+
+         t = {
+	    ['/path/to/IntelCmp/mfiles'] = "/path/to/IntelCmp/mfiles"
+	    ['/path/to/core/mfiles']     = "/path/to/core/mfiles"
+	 }
+	
+      Your routine can relabel and change the labels
+
+         t = {
+	    ['/path/to/IntelCmp/mfiles'] = "Compiler Dependent"
+	    ['/path/to/core/mfiles']     = "Core Modules"
+	 }
+      You can also group them
+         t = {
+	    ['/path/to/IntelCmp/mfiles'] = "Modules"
+	    ['/path/to/core/mfiles']     = "Modules"
+	 }
+      In the last case intel modules and core modules will be
+      grouped together.
+   e) Better handling of zsh tab completion files.  Lmod will
+      continue to install even when a site's zsh setup is
+      broken.
+   f) New option, --show_hidden, has been added. This is used
+      with avail to show "hidden" modulefiles.  That is module
+      files that start with a "."
+
+Lmod Version 5.7.4
+Features/Bug fixes:
+   a) Improved support for redirecting output to stdout.  Now show,
+      and help will write to stdout if LMOD_REDIRECT=yes.
+   b) module show unknown will set the return error code if "unknown"
+      doesn't exist.
+   c) "module --terse spider phdf5" will now produce a terse output.
+   d) a module file can do setenv("FOO","") and set the env.var to an
+      empty string.
+   e) Support for empty strings "" in paths are better supported.
+
+Lmod Version 5.7.2
+Features:
+   a) This version supports (an optional) sending the output of avail, list,
+      spider and keyword stdout instead of stderr.  This available as a
+      configure option, an environment variable (LMOD_REDIRECT=yes) or
+      module --redirect avail.
+
+      Note that if you use this option the internal pager is off.
+
+
+Lmod Version 5.7
+Features:
+   a) Lmod is now more efficient when loading and unloading
+      modulefiles that modify MODULEPATH when there is no
+      cache file.
+   b) Lmod now reports that lua-term is active or not when
+      "module --config". This is there so that if Lmod is
+      built on a system that as a system lua-term on one and
+      is installed on a different system that doesn't.
+   c) module spider now reports module version in "parseVersion"
+      order. (i.e 0.7.10 is newer than 0.7.2)
+   d) Internally Lmod sets LC_ALL=C so that a user's Locale does
+      not effect its behavior.
+
+Bug Fixes:
+   a) Lmod can now handle TCL modulefiles that use
+      "puts --nonewline ..."
+   b) TCL whatis with multiple arguments is now correctly handled.
+   c) Changed require("posix")  to local posix=require("posix")
+
+Lmod Version 5.6.3
+Bug Fixes:
+   a) Lmod now correctly handles prepending multiple directories to
+      MODULEPATH in one prepend_path.
+
+Lmod Version 5.6.2
+Bug Fixes:
+   a) LMOD_EXPERT is now also turns on quiet mode.  It was removed
+      accidently in 5.6.1 and is now restored.
+   b) Lmod had a bug where it tracked prereq, conflict and family
+      commands in module collections where it didn't need to.
+      This means that some users will have to rebuild their module
+      collections when they shouldn't have to.
+
+Lmod Version 5.6.1
+Features:
+   a) The environment variable LMOD_OPTIONS can be use to specify
+      command line options to LMOD:  export LMOD_OPTIONS="--quiet"
+   b) The environment variable LMOD_PAGER can use to specify the pager
+      that Lmod will use, otherwise PAGER is used or "more"
+   c) the -q or --quiet option suppresses messages and warnings (but not
+      errors).
+Bug Fix:
+   a) Executing "module list" when there no modules loaded is a message
+      and not a warning.
+
+Lmod Version 5.6
+Major Bug Fix:
+   Two bugs I have un-earthed cancelled each other all related to saved
+   collections.  The upshot is that many users will have get a message
+   that they have to rebuild their collection because the modules have
+   changed.  This isn't true but they will have to anyway.  I now have
+   tests which will guard against this from happening  again.  I
+   apologize  for this bug.
+
+
+Bug Fixes:
+   a) Lmod is supposed to error out if the modules in a named
+      collection changed in a way such that the loaded modules would be
+      different from loading directly.  This is fixed.
+   b) This version correctly handles prepending to the MODULEPATH outside
+      of Lmod
+   c) Lmod now correctly handles symlinks to a template in the same
+      directory.  Lmod also support the three ways to mark a default
+      with this setup as well.
+   d) Lmod now correctly handles "module-info mode" command in tcl
+      modulefiles.
+   e) tcl2lua.sh improvements to supports Cray modules.
+
+Feature:
+   a) Support for .modulerc in modulefile directory only.  This file can
+      be used to specify the default module only.  No support for System
+      .modulerc or user ~/.modulerc
+
+Lmod Version 5.5.1:
+Bug Fixes:
+   a) Fixed bug where setting the priority twice caused an error. This is now
+      fixed.
+   b) A meta module that starts with "." will not seen by avail and spider.
+
+Lmod Version 5.5:
+Feature:
+   a) priorities can now be used with "module use":
+      $ module use --priority 100 /path/to/modulefiles
+
+
+Bug Fixes:
+   a) Configuring on a system where tclsh is not found is handled better.
+   b) When doing module avail where MODULEPATH points only to non-existant
+      path it now reports that Lmod can not do a module avail.
+
+
+Lmod Version 5.4.2:
+Feature:
+   a) Sites with common home file system can use named collections that are
+      differentiated by LMOD_SYSTEM_NAME.   This means that if the environment
+      variable LMOD_SYSTEM_NAME is set to "foo" then the default collection will
+      be saved to and restored from "default.foo".  Other named collections work
+      the same way.
+
+Bug Fix:
+   a) TCL modules can now have:
+        puts "message"
+      as well.
+
+
+Lmod Version 5.4.1:
+   Added License file to tar ball.
+
+Lmod Version 5.4:
+Features:
+   a) prepend_path now supports a priority.  This means that no matter when
+      a module is loaded a path will pushed to be first:
+
+      	 prepend_path{"PATH","/first",priority=100}  -- lua
+      	 prepend-path  PATH   /first           100   #  tcl
+
+
+      Note the use of {} braces for lua. The braces are only required when
+      specifying the priority, otherwise parens work fine.  Priority works
+      for append_path as well.  It just pushes paths to the right end.  By
+      default, a path has a priority of zero.  Paths will a priority of 100
+      are grouped together. Paths with a priority of 1000 are grouped
+      together to the left of the paths with a priority of 100.  The priority
+      for prepend_path are useful for wrappers.  The priority for append_path
+      is great for catch-alls.
+   b) Lmod now generates "LOADEDMODULES" and "_LMFILES_" to match TCL/C env.
+      modules.
+   c) Lmod now purges modules in reverse order that the module were loaded.
+      This helps when reading Cray modulefiles.
+   d) Lmod ships with lua-term and JSON4lua but will use the system lua-term
+      and lua-json if available.
+   e) added "--raw" to "module --raw show module".  This just prints out the
+      "raw" modulefile.
+   f) Lmod now adds the env. var LMOD_SYSTEM_NAME to the user cache file. So
+      if LMOD_SYSTEM_NAME is Bar and on a intel system the cache file will be
+      ~/.lmod.d/.cache/moduleT.Bar_x86_64.lua
+   g) To match TCL/C modules, the reverse of the module file commands
+      remove_path, unload, etc now does nothing rather-than producing an
+      error.
+   h) Support for a .version file with time to change the default:
+
+           #%Module1.0##################################################
+           set ModulesVersion        "1.4.3"
+           set NewModulesVersion     "1.6.5"
+           set NewModulesVersionDate "2014/04/25"
+
+      Note that the date is in yyyy/mm/dd format. This way it is neither an
+      American or European format.
+   i) To support both rpm and debian package rules, the system .settarg.lua
+      file is renamed to settarg_rc.lua.  The .lmodrc.lua file has been
+      renamed to lmodrc.lua.   User versions of these files remains the same:
+      ".settarg.lua" and ".lmodrc.lua".
+
+Bug Fixes:
+   a) There was a bug with avail and spider where it would not find modules
+      with a dash.  This was fixed between version 5.2.3 and now.
+   b) There was a bug with "module -r spider "^phdf5/1.8.12$" where it would
+      say that the module wasn't there and yet it was.  This has been fixed.
+   c) Improved the wording of "module load foo/1.2" when foo/1.2 existed and
+      when it didn't.  (Thanks to Alex Moskalenko for the fix)
+   d) Lmod would do wrong when "module unload gcc mpich".  It would make
+      mpich inactive.  This is fixed.
+   e) Fixed bug where if there is a symbolic link to the modulefile it wouldn't
+      mark the default module correctly.
+
+Lmod Version 5.3.2:
+Bug Fix:
+   a) Fixed problem with symlink directories and picking the right default.
+   b) Fixed a bug where .version did not find the right default.
+
+Lmod Version 5.3.1:
+Feature:
+   a) added tool "sh_to_modulefile" to convert a bash shell script into
+      a lua based shell script.:
+
+   $ sh_to_modulefile -o intel-14.0.2.lua  /a/intel/bin/iccvars.sh intel64
+
+   note that you can give argument to the shell script.
+
+
+Lmod Version 5.3:
+Features:
+   a) Searching for avail, spider and list are case-insensitive.
+      Lua regexp searching now requires a "-r" option
+   b) The modulefile function isloaded() takes atleast, between and latest:
+        isloaded(atleast("Foo","1.2"))
+   c) Spider searching improved.  When an exact match is found Lmod reports
+      other possible matches:
+
+     R: R/2.1.5
+       Other possible modules matches:
+          PrgEnv, greenlet, parmetis, r
+
+
+Bug Fix:
+   a) Quotes inside a whatis or help message are properly escaped.
+   b) Better handling of nested modules by fixing load order.
+
+Lmod Version 5.2.4:
+Feature:
+  a) Lmod can be configured to ignore TCL module files.
+
+Lmod Version 5.2.3:
+Bug Fixes:
+  a) Prereq now works with a version.
+  b) The function "always_load" works with show.
+  c) The "make install" now works and doesn't complain about not being a
+     git repository.
+
+Lmod Version 5.2:
+Features:
+  a) Modulefiles can mix load commands and setenv's and still be saved and restored.
+  b) In Lua modulefiles you can modify load function behavior:
+        load(atleast("a","1.2"))       -- load module "a" with version 1.2
+                                       -- or higher.
+        load(between("b","1.2","1.4")  -- load module "b" with version between
+                                       -- 1.2 and 1.4.
+        load(latest("c"))              -- load latest version of "c", ignore
+                                       -- marked default.
+
+     This only works in Lua module files, and works on all load functions:
+     load, always_load.
+  c) In Lua modulefiles you can modify prereq function behavior:
+        prereq(atleast("a","1.2"))      -- Module "a" must be version 1.2
+                                        -- or higher.
+        prereq(between("b","1.2","1.4") -- Module "b" must be version between
+                                        -- 1.2 and 1.4.
+        prereq(latest("c"))             -- Module "c" must be latest possible
+
+     This only works in Lua module files, and works on all prereq functions:
+     prereq, prereq_any.
+
+
+Lmod Version 5.1.5:
+Bug Fixes:
+  a) Changes in the terse output for avail and spider.  A directory
+     that contains module versions has a trailing "/"
+  b) The environment that a module sees (and only in that environment).
+     Lmod defines the following variables shown with their current values:
+        LMOD_VERSION:          5.1.5
+        LMOD_VERSION_MAJOR:    5
+        LMOD_VERSION_MINOR:    1
+        LMOD_VERSION_SUBMINOR: 5
+
+  c) Module function to do version comparison (only for lua based modulefiles):
+
+       if (convertToCanonical(LmodVersion()) > convertToCanonical("5.0")) then
+          -- Do something that is only valid for Lmod 5.0 or greater
+       end
+
+    The function convertToCanonical() knows how to deal with alpha, beta,
+    and rc version and the function LmodVersion() returns the current
+    version of Lmod.
+
+
+Lmod Version 5.1.1:
+Bug Fixes and internal improvements
+  a) Lmod can now find all the dot module files.
+  b) Fixed bug with inherit()
+  c) Settarg nolonger tries to control all TARG_* variables.
+  d) Better handling of "Rebuild cache ..." line.
+  e) Improvements to the execute function.
+  f) "module --mt" prints the module table
+  g) "settarg --stt" prints the settarg table.
+
+Lmod Version 5.1.0:
+
+Version 5.1.0 now supports the following new features:
+
+a) module --ignore_cache which tells Lmod to ignore the cache even if it
+   exists.
+
+b) module --config reports how lmod was configured.
+ 
+c) Lmod no longer walks the directory tree on command like list and
+   unload.
+
+d) The pager is now used only when TERM is defined and stderr is
+   connected to a tty (this includes a pty: pseudo tty).
+
+e) The system startup scripts (init/profile, and init/cshrc) that
+   are usually linked to modules.sh and modules.csh in /etc/profile.d
+   contains now modulefiles: lmod and settarg.  Please consider using
+   this as defined or moving these module files into your normal
+   MODULEPATH.
+
+f) Support for settarg has been added for Bash, Zsh and Tcsh users.
+
+g) See README.old for features added in earlier versions.
+
+------------------------------------------------------------------------
+What is Settarg?
+------------------------------------------------------------------------
+
+Settarg is new module that accesses a new tool to dynamically and
+automatically updates "$TARG" and a host of other environment
+variables. These new environment variables encapsulate the state of
+the modules loaded.
+
+                        *** NOTE ****
+
+Please note that settarg feature is optional and is implemented as a
+module.  If and only if the settarg module is loaded you get the new
+behavior.  You can load and unload the settarg module at will to turn
+on and off these new features.  Settarg does work for tcsh users as
+well a feat not to be scoffed at! Unfortunately regular csh is
+missing necessary features for it to work.
+
+                        *** NOTE ****
+
+
+For example, if I have the gcc/4.7.2 module loaded
+and the new settarg module loaded I get the following variables
+defined in my environment.
+
+
+   TARG=OBJ/_x86_64_06_1a_gcc-4.7.3
+   TARG_COMPILER=gcc-4.7.3
+   TARG_COMPILER_FAMILY=gcc
+   TARG_MACH=x86_64_06_1a
+
+If I change my compiler to intel/13.1.0, these variables change to:
+
+   TARG=OBJ/_x86_64_06_1a_intel-13.1.0
+   TARG_COMPILER=intel-13.1.0
+   TARG_COMPILER_FAMILY=intel
+   TARG_MACH=x86_64_06_1a
+
+This was designed to help me as a developer of software applications
+where I am constantly changing compilers, mpi stacks and other
+modules. These variable are used to set the compiler flags and other
+things in my Makefiles to control how my application is built. In my
+case $TARG the directory is where the the objects, libraries and
+executables are placed during the build process. It easy to have the
+title bar reflect the dynamic state of your modules. You can
+abbreviate items mentioned in the titlebar.  I have found this
+combination of settarg and Lmod to be a powerful development
+tool. Even if this workflow is not yours, you may find parts of this
+useful.
+
+For a more complete tour of settargs features see:
+contrib/settarg/Settarg.txt and the Make example in
+contrib/settarg/make_example.
+
 ------------------------------------------------------------------------
 This release of Lmod marks yet another internal refactoring of how it
 works. The commands that your users see remains the same but the
