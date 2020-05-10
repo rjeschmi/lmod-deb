@@ -1,29 +1,11 @@
 diff --git a/Makefile.in b/Makefile.in
-index 8938ca6..160fe7b 100644
+index 296374f..7986ddf 100644
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -41,15 +41,15 @@ GIT_VERSION               := $(shell if [ -n "$(GIT_PROG)" -a -d .git ]; then lm
- prefix		  	  := @prefix@
- package		  	  := lmod
- version		  	  := $(shell cd $(PATH_TO_SRC)/src; $(PATH_TO_LUA)/lua -e "V=require('Version'); print(V.tag())")
--PKGV		  	  := $(prefix)/$(package)/$(version)
--PKG		  	  := $(prefix)/$(package)/$(package)
--LIBEXEC		  	  := $(prefix)/$(package)/$(version)/libexec
--SHELLS                    := $(prefix)/$(package)/$(version)/shells
--TOOLS                     := $(prefix)/$(package)/$(version)/tools
--SETTARG                   := $(prefix)/$(package)/$(version)/settarg
--INIT		  	  := $(prefix)/$(package)/$(version)/init
--LMOD_MF 	  	  := $(prefix)/$(package)/$(version)/modulefiles/Core
--MAN_PAGES                 := $(prefix)/$(package)/$(version)/share/man/cat1
-+PKGV		  	  := $(prefix)/share/$(package)/$(version)
-+PKG		  	  := $(prefix)/share/$(package)/$(package)
-+LIBEXEC		  	  := $(prefix)/share/$(package)/$(version)/libexec
-+SHELLS                    := $(prefix)/share/$(package)/$(version)/shells
-+TOOLS                     := $(prefix)/share/$(package)/$(version)/tools
-+SETTARG                   := $(prefix)/share/$(package)/$(version)/settarg
-+INIT		  	  := $(prefix)/share/$(package)/$(version)/init
-+LMOD_MF 	  	  := $(prefix)/share/$(package)/$(version)/modulefiles/Core
-+MAN_PAGES                 := $(prefix)/share/$(package)/$(version)/share/man/cat1
- LMOD_MF_SOURCE            := MF/*.version.lua
- SETTARG_SOURCE            := settarg/*.lua  settarg/targ.in
- 
+@@ -8,7 +8,7 @@ PATH_TO_LUA               := @PATH_TO_LUA@
+ version                          := $(shell LUA_PATH="$(srcdir)/src/?.lua;" $(PATH_TO_LUA)/lua -e "V=require('Version'); print(V.tag())")
+ SITE_CONTROLLED_PREFIX    := @SITE_CONTROLLED_PREFIX@
+ LMOD_ROOT                 := $(prefix)/$(package)
+-MY_PACKAGE                := $(prefix)/$(package)/$(version)
++MY_PACKAGE                := $(prefix)/share/$(package)/$(version)
+ MY_PKG_PACKAGE            := $(prefix)/$(package)/$(package)
