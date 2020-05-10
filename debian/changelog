@@ -1,8 +1,8 @@
-lmod (8.3.10-1ubuntu1) UNRELEASED; urgency=medium
+lmod (8.3.10-1ubuntu1) unstable; urgency=medium
 
   just bumping version to handle replacing the maintainer* 
 
- -- Robert Schmidt <rjeschmi@gmail.com>  Sun, 10 May 2020 15:22:05 -0400
+ -- Robert Schmidt <rjeschmi@gmail.com>  Sun, 10 May 2020 15:32:58 -0400
 
 lmod (8.3.10-1) unstable; urgency=medium
 
